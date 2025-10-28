@@ -1,0 +1,2 @@
+[console_scripts]
+langguard = langguard.main:main

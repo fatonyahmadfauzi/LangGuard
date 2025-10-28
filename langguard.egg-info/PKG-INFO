@@ -1,0 +1,9 @@
+Metadata-Version: 2.2
+Name: langguard
+Version: 1.0.0
+Summary: Multilingual Dictionary Guardian - Analyze and manage DISPLAY_LANGUAGES consistency
+Author: Fatony Ahmad Fauzi
+Author-email: fatonyahmadfauzi@gmail.com
+Dynamic: author
+Dynamic: author-email
+Dynamic: summary

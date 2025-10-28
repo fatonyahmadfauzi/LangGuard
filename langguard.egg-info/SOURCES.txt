@@ -1,0 +1,8 @@
+setup.py
+langguard/__init__.py
+langguard/main.py
+langguard.egg-info/PKG-INFO
+langguard.egg-info/SOURCES.txt
+langguard.egg-info/dependency_links.txt
+langguard.egg-info/entry_points.txt
+langguard.egg-info/top_level.txt
