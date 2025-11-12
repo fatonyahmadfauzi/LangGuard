@@ -1,6 +1,17 @@
 setup.py
 langguard/__init__.py
+langguard/add_languages.py
+langguard/analysis.py
+langguard/clipboard.py
+langguard/fallback_strategy.py
+langguard/fix_order.py
+langguard/insert_section.py
+langguard/language_utils.py
 langguard/main.py
+langguard/remove_languages.py
+langguard/repair_functions.py
+langguard/translate.py
+langguard/update_language.py
 langguard.egg-info/PKG-INFO
 langguard.egg-info/SOURCES.txt
 langguard.egg-info/dependency_links.txt

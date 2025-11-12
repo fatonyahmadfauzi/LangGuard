@@ -126,9 +126,6 @@ DISPLAY_LANGUAGES = {
         "language_switcher_updated": "✅ Pengalih bahasa di {filename} diperbarui",
         "file_deleted": "🗑️ File {filename} berhasil dihapus",
         "folder_deleted": "🗑️ Folder {folder} berhasil dihapus"
-    },
-    "kr": {
-
     }
 }
 

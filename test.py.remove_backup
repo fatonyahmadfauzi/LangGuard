@@ -18,128 +18,49 @@ from tqdm import tqdm
 
 DISPLAY_LANGUAGES = {
     "en": {
-        "translating_readme": "📘 Translating README to {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} successfully created",
-        "translating_changelog": "📘 Translating CHANGELOG to {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} successfully created",
-        "changelog_links_updated": "✅ Changelog links updated in {filename}",
-        "all_translated": "🎉 All READMEs successfully translated!",
-        "language_switcher_updated": "✅ Language switcher in {filename} updated",
-        "file_deleted": "🗑️ File {filename} successfully deleted",
-        "folder_deleted": "🗑️ Folder {folder} successfully deleted"
+    # English translations will be added globally later
     },
     "pl": {
-        "translating_readme": "📘 Tłumaczenie README na {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} pomyślnie utworzono",
-        "translating_changelog": "📘 Tłumaczenie CHANGELOG na {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} pomyślnie utworzono",
-        "changelog_links_updated": "✅ Linki do dziennika zmian zaktualizowane w {filename}",
-        "all_translated": "🎉 Wszystkie pliki README zostały pomyślnie przetłumaczone!",
-        "language_switcher_updated": "✅ Zaktualizowano przełącznik języka w {filename}",
-        "file_deleted": "🗑️ Plik {filename} został pomyślnie usunięty",
-        "folder_deleted": "🗑️ Folder {folder} został pomyślnie usunięty"
+    # Polski translations will be added globally later
     },
     "zh": {
-        "translating_readme": "📘 正在将自述文件翻译为 {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} 已成功创建",
-        "translating_changelog": "📘 正在将 CHANGELOG 翻译为 {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} 已成功创建",
-        "changelog_links_updated": "✅ 在 {filename} 中更新了变更日志链接",
-        "all_translated": "🎉 所有自述文件均已成功翻译！",
-        "language_switcher_updated": "✅ 更新了 {filename} 中的语言切换器",
-        "file_deleted": "🗑️ 文件 {filename} 已成功删除",
-        "folder_deleted": "🗑️ 文件夹 {folder} 已成功删除"
+    # 中文 translations will be added globally later
     },
     "jp": {
-        "translating_readme": "📘 README を {lang_name} ({lang_code}) に翻訳しています...",
-        "readme_created": "✅ {path} が正常に作成されました",
-        "translating_changelog": "📘 CHANGELOG を {lang_name} ({lang_code}) に変換しています...",
-        "changelog_created": "✅ {path} が正常に作成されました",
-        "changelog_links_updated": "✅ 変更ログのリンクが {filename} で更新されました",
-        "all_translated": "🎉 すべての README が正常に翻訳されました。",
-        "language_switcher_updated": "✅ {filename} の言語スイッチャーが更新されました",
-        "file_deleted": "🗑️ ファイル {filename} は正常に削除されました",
-        "folder_deleted": "🗑️ フォルダー {folder} が正常に削除されました"
+    # 日本語 translations will be added globally later
     },
     "de": {
-        "translating_readme": "📘 README wird in {lang_name} ({lang_code}) übersetzt...",
-        "readme_created": "✅ {path} erfolgreich erstellt",
-        "translating_changelog": "📘 CHANGELOG wird in {lang_name} ({lang_code}) übersetzt...",
-        "changelog_created": "✅ {path} erfolgreich erstellt",
-        "changelog_links_updated": "✅ Changelog-Links aktualisiert in {filename}",
-        "all_translated": "🎉 Alle READMEs erfolgreich übersetzt!",
-        "language_switcher_updated": "✅ Sprachumschalter in {filename} aktualisiert",
-        "file_deleted": "🗑️ Datei {filename} erfolgreich gelöscht",
-        "folder_deleted": "🗑️ Ordner {folder} erfolgreich gelöscht"
+    # Deutsch translations will be added globally later
     },
     "fr": {
-        "translating_readme": "📘 Traduction du README en {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} créé avec succès",
-        "translating_changelog": "📘 Traduction de CHANGELOG en {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} créé avec succès",
-        "changelog_links_updated": "✅ Liens du journal des modifications mis à jour dans {filename}",
-        "all_translated": "🎉 Tous les README traduits avec succès !",
-        "language_switcher_updated": "✅ Sélecteur de langue dans {filename} mis à jour",
-        "file_deleted": "🗑️ Fichier {filename} supprimé avec succès",
-        "folder_deleted": "🗑️ Dossier {folder} supprimé avec succès"
+    # Français translations will be added globally later
     },
     "es": {
-        "translating_readme": "📘 Traduciendo README a {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} creado exitosamente",
-        "translating_changelog": "📘 Traduciendo CHANGELOG a {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} creado exitosamente",
-        "changelog_links_updated": "✅ Enlaces del registro de cambios actualizados en {filename}",
-        "all_translated": "🎉 ¡Todos los archivos README traducidos correctamente!",
-        "language_switcher_updated": "✅ Cambiador de idioma en {filename} actualizado",
-        "file_deleted": "🗑️ Archivo {filename} eliminado exitosamente",
-        "folder_deleted": "🗑️ Carpeta {folder} eliminada correctamente"
+    # Español translations will be added globally later
     },
     "ru": {
-        "translating_readme": "📘 Перевод README в {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} успешно создано",
-        "translating_changelog": "📘 Перевод CHANGELOG в {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} успешно создан",
-        "changelog_links_updated": "✅ Ссылки на журнал изменений обновлены в {filename}.",
-        "all_translated": "🎉 Все README успешно переведены!",
-        "language_switcher_updated": "✅ Обновлен переключатель языка в {filename}.",
-        "file_deleted": "🗑️ Файл {filename} успешно удален.",
-        "folder_deleted": "🗑️ Папка {folder} успешно удалена."
+    # Pycckuñ translations will be added globally later
     },
     "pt": {
-        "translating_readme": "📘 Traduzindo README para {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} criado com sucesso",
-        "translating_changelog": "📘 Traduzindo CHANGELOG para {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} criado com sucesso",
-        "changelog_links_updated": "✅ Links do changelog atualizados em {filename}",
-        "all_translated": "🎉 Todos os READMEs traduzidos com sucesso!",
-        "language_switcher_updated": "✅ Alternador de idioma em {filename} atualizado",
-        "file_deleted": "🗑️ Arquivo {filename} excluído com sucesso",
-        "folder_deleted": "🗑️ Pasta {folder} excluída com sucesso"
+    # Portugués translations will be added globally later
     },
     "id": {
-        "translating_readme": "📘 Menerjemahkan README ke {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} berhasil dibuat",
-        "translating_changelog": "📘 Menerjemahkan CHANGELOG ke {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} berhasil dibuat",
-        "changelog_links_updated": "✅ Tautan log perubahan diperbarui di {filename}",
-        "all_translated": "🎉 Semua README berhasil diterjemahkan!",
-        "language_switcher_updated": "✅ Pengalih bahasa di {filename} diperbarui",
-        "file_deleted": "🗑️ File {filename} berhasil dihapus",
-        "folder_deleted": "🗑️ Folder {folder} berhasil dihapus"
+    # Indonesia translations will be added globally later
     },
     "kr": {
-
+    # 한국어 translations will be added here
     }
 }
 
 # 🌐 Display Language Control
-DISPLAY_LANG = "jp"
+DISPLAY_LANG = "ru"
 
 def set_display_language(lang_code):
     """Set display language for notifications"""
     global DISPLAY_LANG
     if lang_code in DISPLAY_LANGUAGES:
         DISPLAY_LANG = lang_code
+        print(f"✅ Display language set to: {lang_code}")
     else:
         print(f"❌ Language '{lang_code}' not supported. Using English.")
 
@@ -149,8 +70,9 @@ def t(key, **kwargs):
     try:
         if DISPLAY_LANG in DISPLAY_LANGUAGES and key in DISPLAY_LANGUAGES[DISPLAY_LANG]:
             return DISPLAY_LANGUAGES[DISPLAY_LANG][key].format(**kwargs)
+        elif key in DISPLAY_LANGUAGES["ru"]:
+            return DISPLAY_LANGUAGES["ru"][key].format(**kwargs)
         else:
-            # Jika tidak ditemukan, tetap kembalikan key tanpa fallback ke English
             return key
     except Exception:
         return key

@@ -128,7 +128,7 @@ DISPLAY_LANGUAGES = {
         "folder_deleted": "🗑️ Folder {folder} berhasil dihapus"
     },
     "kr": {
-
+        # 한국어 translations will be added globally later
     }
 }
 

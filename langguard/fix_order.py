@@ -1,17 +1,37 @@
 #!/usr/bin/env python3
 """
 Script untuk memperbaiki urutan DISPLAY_LANGUAGES
-Versi yang lebih sederhana dan efektif
+Versi yang lebih sederhana dan efektif - DENGAN FALLBACK STRATEGY
 """
 
 import re
 import os
+import sys
+
+# ✅ GUNAKAN language_utils untuk menghindari circular import
+try:
+    from .language_utils import get_correct_language_order
+except ImportError:
+    from language_utils import get_correct_language_order
 
 def fix_language_order(file_path):
-    """Perbaiki urutan bahasa sesuai standar"""
+    """Perbaiki urutan bahasa sesuai standar - DENGAN FALLBACK"""
     
-    # Urutan standar yang diinginkan
-    correct_order = ['en', 'id', 'jp', 'de', 'es', 'fr', 'kr', 'pl', 'pt', 'ru', 'zh']
+    # ✅ GUNAKAN FALLBACK STRATEGY YANG BARU:
+    try:
+        from .fallback_strategy import fallback_for_fix_order
+    except ImportError:
+        from fallback_strategy import fallback_for_fix_order
+    
+    # Cek section dan generate jika perlu
+    if not fallback_for_fix_order(file_path):
+        return False  # File tidak ada atau user cancel
+    
+    # Lanjut proses fix-order normal (section sudah ada)
+    print("🔄 Continuing with fix-order process...")
+    
+    # Urutan standar yang diinginkan - GUNAKAN FUNGSI YANG SUDAH ADA
+    correct_order = get_correct_language_order()
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -144,7 +164,7 @@ def verify_fix(file_path):
         
         # Cari semua bahasa setelah perbaikan
         langs = re.findall(r'"(\w+)":\s*\{', content)
-        expected_order = ['en', 'id', 'jp', 'de', 'es', 'fr', 'kr', 'pl', 'pt', 'ru', 'zh']
+        expected_order = get_correct_language_order()  # ✅ GUNAKAN FUNGSI
         
         print(f"🔍 Verifikasi urutan setelah perbaikan:")
         print(f"   Urutan aktual: {', '.join(langs)}")
@@ -163,28 +183,8 @@ def verify_fix(file_path):
         return False
 
 if __name__ == "__main__":
-    target_file = "multidoc_translator.py"
-    
-    if not os.path.exists(target_file):
-        print(f"❌ File {target_file} tidak ditemukan")
-        print("💡 Pastikan script ini berada di folder yang sama dengan multidoc_translator.py")
-        exit(1)
-    
-    print("🛡️ LangGuard - Language Order Fixer")
-    print("=" * 50)
-    
-    # Tampilkan urutan saat ini
-    show_current_order(target_file)
-    print()
-    
-    # Konfirmasi
-    response = input("🚀 Perbaiki urutan bahasa? (y/n): ")
-    if response.lower() in ['y', 'yes']:
-        print()
-        success = fix_language_order(target_file)
-        if success:
-            print("\n" + "="*50)
-            verify_fix(target_file)
-            print("\n🎉 Selesai! File telah diperbaiki dengan urutan yang benar.")
+    if len(sys.argv) > 1:
+        fix_language_order(sys.argv[1])
     else:
-        print("❌ Dibatalkan")
+        print("❌ Please provide a target file")
+        print("Usage: python fix_order.py <filename>")

@@ -17,17 +17,6 @@ from tqdm import tqdm
 # ---------------------- DISPLAY LANGUAGE SETTINGS ----------------------
 
 DISPLAY_LANGUAGES = {
-    "en": {
-        "translating_readme": "📘 Translating README to {lang_name} ({lang_code})...",
-        "readme_created": "✅ {path} successfully created",
-        "translating_changelog": "📘 Translating CHANGELOG to {lang_name} ({lang_code})...",
-        "changelog_created": "✅ {path} successfully created",
-        "changelog_links_updated": "✅ Changelog links updated in {filename}",
-        "all_translated": "🎉 All READMEs successfully translated!",
-        "language_switcher_updated": "✅ Language switcher in {filename} updated",
-        "file_deleted": "🗑️ File {filename} successfully deleted",
-        "folder_deleted": "🗑️ Folder {folder} successfully deleted"
-    },
     "pl": {
         "translating_readme": "📘 Tłumaczenie README na {lang_name} ({lang_code})...",
         "readme_created": "✅ {path} pomyślnie utworzono",
@@ -128,7 +117,7 @@ DISPLAY_LANGUAGES = {
         "folder_deleted": "🗑️ Folder {folder} berhasil dihapus"
     },
     "kr": {
-
+        # 한국어 translations will be added globally later
     }
 }
 
