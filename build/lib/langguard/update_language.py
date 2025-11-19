@@ -3,6 +3,12 @@ import re
 import os
 import sys
 
+# ✅ IMPORT BARU - tambahkan language_selection
+try:
+    from .language_selection import select_default_language
+except ImportError:
+    from language_selection import select_default_language
+
 LANGUAGES = {
     "en": "English",
     "pl": "Polski",
@@ -288,97 +294,6 @@ def set_default_display_language_in_file(file_path, lang_code):
     print(f"📁 Backup saved: {backup}")
     return True
 
-def choose_language(available_langs=None, file_path=None):
-    """Tampilkan daftar bahasa yang tersedia dan minta user memilih."""
-    
-    # Dapatkan bahasa default saat ini jika file_path diberikan
-    current_default = None
-    if file_path:
-        current_default = get_current_display_language(file_path)
-    
-    # Jika available_langs tidak diberikan, gunakan semua bahasa
-    if available_langs is None:
-        available_langs = list(LANGUAGES.keys())
-    
-    # ✅ PERBAIKAN: Cek apakah semua bahasa sudah lengkap
-    all_supported_langs = set(get_all_supported_languages())
-    current_available_langs = set(available_langs)
-    all_languages_complete = (current_available_langs == all_supported_langs)
-    
-    # Jika hanya ada 1 bahasa
-    if len(available_langs) == 1:
-        lang_code = available_langs[0]
-        lang_name = LANGUAGES.get(lang_code, lang_code.upper())
-        print(f"🌍 You only have 1 language: {lang_name} ({lang_code})")
-        print("✅ This language is already set as default")
-        
-        change_choice = input("Do you want to add more languages? (y/N): ").strip().lower()
-        if change_choice == 'y':
-            return "add_languages"
-        else:
-            return None
-    
-    # Jika ada multiple languages, tampilkan pilihan dengan penanda default
-    print("\n🌍 Select display language:")
-    print("=" * 50)
-    
-    # Hanya tampilkan bahasa yang tersedia
-    for i, lang_code in enumerate(available_langs, 1):
-        lang_name = LANGUAGES.get(lang_code, lang_code.upper())
-        # Tambahkan penanda ⭐ untuk bahasa default saat ini
-        default_indicator = " ⭐ (CURRENT DEFAULT)" if lang_code == current_default else ""
-        print(f"{i}. {lang_code} - {lang_name}{default_indicator}")
-    
-    print("=" * 50)
-    print("💡 Options:")
-    print("   - Enter number or language code")
-    
-    # ✅ PERBAIKAN: Hanya tampilkan opsi 'A' jika bahasa belum lengkap
-    if not all_languages_complete:
-        print("   - 'A' to add more languages")
-    
-    print("   - 'S' to skip (keep current language)")
-
-    while True:
-        choice = input("👉 Enter your choice: ").strip()
-
-        if choice.upper() == 'A' and not all_languages_complete:
-            return "add_languages"
-        elif choice.upper() == 'S':
-            print("⏭️ Operation skipped. No changes made.")
-            return None
-        
-        # ✅ PERBAIKAN: Jika semua bahasa sudah lengkap dan user mengetik 'A', beri pesan error
-        if choice.upper() == 'A' and all_languages_complete:
-            print("❌ All supported languages are already available. Cannot add more languages.")
-            print("💡 Please enter a number or language code instead.")
-            continue
-        
-        if choice.isdigit():
-            choice = int(choice)
-            if 1 <= choice <= len(available_langs):
-                selected_lang = available_langs[choice - 1]
-                # ✅ PERBAIKAN: Jika memilih bahasa yang sudah default, beri pesan dan return None
-                if selected_lang == current_default:
-                    print(f"ℹ️ '{selected_lang}' is already the current default language. No changes needed.")
-                    return None
-                return selected_lang
-            else:
-                print(f"❌ Please enter number between 1 and {len(available_langs)}")
-        else:
-            choice = choice.lower()
-            if choice in available_langs:
-                # ✅ PERBAIKAN: Jika memilih bahasa yang sudah default, beri pesan dan return None
-                if choice == current_default:
-                    print(f"ℹ️ '{choice}' is already the current default language. No changes needed.")
-                    return None
-                return choice
-            else:
-                if all_languages_complete:
-                    print(f"❌ Language '{choice}' not available. Choose from: {', '.join(available_langs)} or 'S' to skip")
-                else:
-                    print(f"❌ Language '{choice}' not available. Choose from: {', '.join(available_langs)} or 'A' to add languages, 'S' to skip")
-
 def show_current_language(file_path, available_langs=None):
     """Tampilkan bahasa yang sedang aktif di file."""
     if not os.path.exists(file_path):
@@ -510,8 +425,9 @@ def run_set_global_lang(file_path):
     if current_fallback:
         print(f"🔍 Current fallback language: {current_fallback}")
 
-    # Pilih bahasa baru - kirim file_path untuk menampilkan current default
-    lang = choose_language(available_langs, file_path)
+    # ✅ GUNAKAN FUNGSI TERPUSAT untuk pemilihan bahasa default
+    current_default = get_current_display_language(file_path)
+    lang = select_default_language(available_langs, current_default)
 
     if not lang:
         # ✅ PERBAIKAN: Jika lang adalah None, ini berarti:
@@ -528,7 +444,8 @@ def run_set_global_lang(file_path):
             # Setelah menambah bahasa, tanya lagi untuk set global language
             print("\n🔄 Now let's set the global language...")
             available_langs = get_available_languages_from_file(file_path)
-            lang = choose_language(available_langs, file_path)
+            current_default = get_current_display_language(file_path)
+            lang = select_default_language(available_langs, current_default)
             
             if lang and lang != "add_languages":
                 set_default_display_language_in_file(file_path, lang)

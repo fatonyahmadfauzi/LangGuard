@@ -74,7 +74,7 @@ def should_check_file(file_path):
     skip_files = {
         'setup.py', '__init__.py', 'test_', 'conftest.py',
         'template_utils.py', 'insert_section.py', 'add_languages.py',
-        'repair_functions.py', 'analysis.py', 'fix_order.py',
+        'repair_functions.py', 'analysis.py',
         'remove_languages.py', 'update_language.py', 'main.py'
     }
     
@@ -175,6 +175,20 @@ def check_file_quick(file_path):
 def ask_translate_missing_phrases(file_path, inconsistent_langs):
     """Tanya user apakah ingin mentranslasi bahasa dengan phrases yang kurang/kosong"""
     if not inconsistent_langs:
+        return False
+    
+    # ✅ PERBAIKAN: Cek English phrases SEBELUM menawarkan translasi
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        english_phrases = extract_english_phrases(content)
+        if not english_phrases:
+            print("❌ Cannot translate: English section is empty!")
+            print("💡 Add English phrases first before translating other languages")
+            return False
+    except Exception as e:
+        print(f"❌ Error checking English phrases: {e}")
         return False
     
     # ✅ PERBAIKAN: Cek koneksi internet SEBELUM menawarkan translasi
@@ -319,42 +333,6 @@ def ask_translate_new_languages(file_path, new_languages):
         else:
             print("❌ Please enter 'y' for Yes or 'n' for No")
 
-def ask_fix_language_order(file_path, current_order, expected_order):
-    """Tanya user apakah ingin memperbaiki urutan bahasa"""
-    if current_order == expected_order:
-        return False
-    
-    print(f"\n⚠️  Language order is incorrect!")
-    print(f"   Current: {', '.join(current_order)}")
-    print(f"   Expected: {', '.join(expected_order)}")
-    
-    while True:
-        choice = input(f"👉 Do you want to fix the language order now? (y/N): ").strip().lower()
-        
-        if choice in ['y', 'yes']:
-            print("\n🎯 Fixing language order...")
-            try:
-                try:
-                    from fix_order import fix_language_order
-                    result = fix_language_order(file_path)
-                    return result
-                except ImportError:
-                    try:
-                        from .fix_order import fix_language_order
-                        result = fix_language_order(file_path)
-                        return result
-                    except ImportError:
-                        print("❌ Cannot import fix_order module")
-                        return False
-            except Exception as e:
-                print(f"❌ Error fixing order: {e}")
-                return False
-        elif choice in ['n', 'no', '']:
-            print("ℹ️ Order fix skipped.")
-            return False
-        else:
-            print("❌ Please enter 'y' for Yes or 'n' for No")
-
 def run_translate_on_file(file_path):
     """Jalankan translate pada file tertentu"""
     try:
@@ -485,22 +463,29 @@ def check_english_phrases(file_path):
         phrases1 = re.findall(r'"([^"]+)":\s*"([^"]*)"', en_content)
         # Pattern 2: "key": "value {placeholder}"
         phrases2 = re.findall(r'"([^"]+)":\s*"[^{]*\{[^}]*\}[^"]*"', en_content)
-        # Pattern 3: "key": value (tanpa quotes)
-        phrases3 = re.findall(r'"([^"]+)":\s*[^",\n][^,\n]*', en_content)
         
         all_phrases = set()
         # Hanya ambil key dari pattern 1 dan 2
         for key, value in phrases1:
-            all_phrases.add(key)
+            if key.strip():  # Pastikan key tidak kosong
+                all_phrases.add(key)
         for key, value in phrases2:
-            all_phrases.add(key)
-        # Untuk pattern 3, ambil langsung key
-        all_phrases.update(phrases3)
+            if key.strip():  # Pastikan key tidak kosong
+                all_phrases.add(key)
         
         return len(all_phrases) > 0, len(all_phrases)
     
     except Exception as e:
+        print(f"❌ Error checking English phrases in {file_path}: {e}")
         return False, 0
+
+LANGUAGE_NAMES = {
+    "en": "English", "pl": "Polski", "zh": "中文", "jp": "日本語",
+    "de": "Deutsch", "fr": "Français", "es": "Español", "ru": "Pycckuñ",
+    "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
+}
+
+# analysis.py - perbaikan fungsi ask_fix_all_issues
 
 def ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases):
     """Tanya user apakah ingin memperbaiki semua masalah di semua file"""
@@ -509,31 +494,32 @@ def ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases):
     if total_issues == 0:
         return False
     
-    # Tampilkan summary masalah
-    all_missing_langs = set()
-    for file_path, missing_langs in files_with_missing_langs:
-        all_missing_langs.update(missing_langs)
-    
-    all_empty_langs = set()
-    for file_path, empty_langs in files_with_empty_phrases:
-        all_empty_langs.update(empty_langs)
-    
     print(f"\n📊 ISSUES SUMMARY:")
     print("=" * 50)
     
     if files_with_missing_langs:
         print(f"❌ {len(files_with_missing_langs)} files missing languages:")
         for file_path, missing_langs in files_with_missing_langs:
-            print(f"   - {os.path.basename(file_path)}: {', '.join(missing_langs)}")
+            # ✅ PERBAIKAN: Tampilkan dengan nama bahasa asli
+            missing_display = []
+            for lang_code in missing_langs:
+                lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                missing_display.append(f"{lang_code} ({lang_name})")
+            print(f"   - {os.path.basename(file_path)}: {', '.join(missing_display)}")
     
     if files_with_empty_phrases:
         print(f"⚠️  {len(files_with_empty_phrases)} files with empty phrases:")
         for file_path, empty_langs in files_with_empty_phrases:
-            print(f"   - {os.path.basename(file_path)}: {', '.join(empty_langs)}")
+            # ✅ PERBAIKAN: Tampilkan dengan nama bahasa asli
+            empty_display = []
+            for lang_code in empty_langs:
+                lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                empty_display.append(f"{lang_code} ({lang_name})")
+            print(f"   - {os.path.basename(file_path)}: {', '.join(empty_display)}")
     
     print("=" * 50)
     
-    # Cek apakah ada file yang tidak memiliki English phrases
+    # ✅ PERBAIKAN: Cek file yang tidak memiliki English phrases dengan benar
     files_without_english = []
     all_files_to_check = list(set([fp for fp, _ in files_with_missing_langs] + [fp for fp, _ in files_with_empty_phrases]))
     
@@ -545,7 +531,22 @@ def ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases):
     if files_without_english:
         print(f"\n⚠️  WARNING: {len(files_without_english)} files have no English phrases:")
         for file_path in files_without_english:
-            print(f"   - {os.path.basename(file_path)}: English section is empty")
+            # Tampilkan bahasa yang sebenarnya ada di file
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                existing_langs = get_existing_languages_from_content(content)
+                if existing_langs:
+                    # ✅ PERBAIKAN: Tampilkan nama bahasa yang ada dengan konsisten
+                    existing_lang_names = []
+                    for lang_code in existing_langs:
+                        lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                        existing_lang_names.append(f"{lang_code} ({lang_name})")
+                    print(f"   - {os.path.basename(file_path)}: English missing (has: {', '.join(existing_lang_names)})")
+                else:
+                    print(f"   - {os.path.basename(file_path)}: No languages found")
+            except Exception:
+                print(f"   - {os.path.basename(file_path)}: Error reading file")
         print("   💡 Translation requires English phrases as reference")
     
     # Pertanyaan sederhana
@@ -576,7 +577,22 @@ def ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases):
                     # Cek dulu apakah file memiliki English phrases
                     has_english, phrase_count = check_english_phrases(file_path)
                     if not has_english:
-                        print(f"      ⚠️  Cannot translate - English phrases are empty")
+                        # Tampilkan bahasa yang sebenarnya ada
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                            existing_langs = get_existing_languages_from_content(content)
+                            if existing_langs:
+                                # ✅ PERBAIKAN: Tampilkan nama bahasa yang ada dengan konsisten
+                                existing_lang_names = []
+                                for lang_code in existing_langs:
+                                    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                                    existing_lang_names.append(f"{lang_code} ({lang_name})")
+                                print(f"      ⚠️  Cannot translate - English missing (file has: {', '.join(existing_lang_names)})")
+                            else:
+                                print(f"      ⚠️  Cannot translate - No languages found")
+                        except Exception:
+                            print(f"      ⚠️  Cannot translate - Error reading file")
                         continue
                     
                     if run_translate_on_file(file_path):
@@ -593,7 +609,21 @@ def ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases):
             if files_without_english:
                 print(f"   ⚠️  Files skipped (no English phrases): {len(files_without_english)}")
                 for file_path in files_without_english:
-                    print(f"      - {os.path.basename(file_path)}")
+                    # Tampilkan bahasa yang sebenarnya ada
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        existing_langs = get_existing_languages_from_content(content)
+                        if existing_langs:
+                            existing_lang_names = []
+                            for lang_code in existing_langs:
+                                lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                                existing_lang_names.append(f"{lang_code} ({lang_name})")
+                            print(f"      - {os.path.basename(file_path)} (has: {', '.join(existing_lang_names)})")
+                        else:
+                            print(f"      - {os.path.basename(file_path)} (no languages)")
+                    except Exception:
+                        print(f"      - {os.path.basename(file_path)}")
             
             return True
             
@@ -630,6 +660,24 @@ def analyze_file(file_path):
             if not is_actual_display_section(content, file_path):
                 print(f"ℹ️  Skipping template file (no actual implementation): {file_path}")
                 return False
+            
+            # ✅ PERBAIKAN: CEK ENGLISH PHRASES DI AWAL SEBELUM ANALISIS LAINNYA
+            english_phrases = extract_english_phrases(content)
+            english_empty = len(english_phrases) == 0
+            
+            if english_empty:
+                print("❌ CRITICAL ERROR: No English phrases found in DISPLAY_LANGUAGES!")
+                print("💡 English phrases are required as reference for translation")
+                print("🔧 Action: Manually add English phrases to the 'en' section")
+                print("")
+                print("   Example:")
+                print('   "en": {')
+                print('       "hello": "Hello",')
+                print('       "world": "World"')
+                print('   }')
+                print("")
+                print("💡 After adding English phrases, run 'langguard translate' again")
+                return False  # HENTIKAN ANALISIS DI SINI
             
             # ✅ GUNAKAN FUNGSI DARI language_utils
             existing_langs = get_existing_languages_from_content(content)
@@ -835,22 +883,17 @@ def analyze_file(file_path):
                     raw_langs = re.findall(r'"(\w+)":\s*\{', content)
                     expected_order_for_existing = [lang for lang in correct_order if lang in existing_langs]
             
-            # 2. Tawarkan perbaikan urutan bahasa
-            if raw_langs != expected_order_for_existing:
-                if ask_fix_language_order(file_path, raw_langs, expected_order_for_existing):
-                    actions_taken = True
-            
-            # 3. ✅ PERBAIKAN KHUSUS: Tawarkan translasi HANYA jika English memiliki phrases
+            # 2. ✅ PERBAIKAN: Tawarkan translasi HANYA jika English memiliki phrases
+            # (Kita sudah cek di awal, jadi pasti English tidak kosong)
             languages_need_translation = []
             
-            if not english_empty:  # Hanya jika English tidak kosong
-                for lang in existing_langs:
-                    if lang == "en":
-                        continue
-                        
-                    phrase_count = lang_stats.get(lang, {}).get('count', 0)
-                    if phrase_count == 0 or (english_phrases_count > 0 and phrase_count < english_phrases_count):
-                        languages_need_translation.append(lang)
+            for lang in existing_langs:
+                if lang == "en":
+                    continue
+                    
+                phrase_count = lang_stats.get(lang, {}).get('count', 0)
+                if phrase_count == 0 or (english_phrases_count > 0 and phrase_count < english_phrases_count):
+                    languages_need_translation.append(lang)
             
             if languages_need_translation:
                 # Buat inconsistent_langs structure untuk fungsi yang ada
@@ -865,8 +908,7 @@ def analyze_file(file_path):
                 if ask_translate_missing_phrases(file_path, inconsistent_langs):
                     actions_taken = True
             
-            # 4. Jika tidak ada masalah atau user memilih skip semua
-            # ✅ PERBAIKAN: Jangan katakan "No issues found" jika English kosong
+            # 3. Jika tidak ada masalah atau user memilih skip semua
             has_issues = (missing_langs or 
                          len([lang for lang in empty_languages if lang != "en"]) > 0 or 
                          incomplete_languages or 
@@ -874,8 +916,6 @@ def analyze_file(file_path):
             
             if not actions_taken and not has_issues:
                 print("\n🎉 No issues found - file is in perfect condition!")
-            elif not actions_taken and english_empty:
-                print("\n⚠️  Main issue: English section is empty (add phrases manually to enable translation)")
             elif not actions_taken:
                 print("\nℹ️ Analysis completed. No changes were made.")
             
@@ -1022,6 +1062,11 @@ def list_files(quiet=False, search_subfolders=True):
     
     return found_files
 
+LANGUAGE_NAMES = {
+    "en": "English", "pl": "Polski", "zh": "中文", "jp": "日本語",
+    "de": "Deutsch", "fr": "Français", "es": "Español", "ru": "Pycckuñ",
+    "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
+}
 
 def auto_check_all():
     """Automatically check all Python files with DISPLAY_LANGUAGES"""
@@ -1043,13 +1088,11 @@ def auto_check_all():
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # ✅ GUNAKAN FUNGSI DARI language_utils
         existing_langs = get_existing_languages_from_content(content)
         all_supported = get_all_supported_languages()
         
-        # ✅ PERBAIKAN: Cek apakah semua bahasa memiliki phrases
-        all_have_phrases = True
-        empty_languages = []
+        # Cek bahasa yang memiliki phrases kosong
+        languages_with_empty_phrases = []
         for lang in existing_langs:
             lang_pattern = rf'"{lang}":\s*\{{(.*?)\n    \}}'
             lang_match = re.search(lang_pattern, content, re.DOTALL)
@@ -1059,31 +1102,45 @@ def auto_check_all():
                 phrases2 = re.findall(r'"([^"]+)":\s*"[^{]*\{[^}]*\}[^"]*"', lang_content)
                 all_phrases = set(phrases1 + phrases2)
                 if len(all_phrases) == 0:
-                    all_have_phrases = False
-                    empty_languages.append(lang)
+                    languages_with_empty_phrases.append(lang)
         
         missing_langs = [lang for lang in all_supported if lang not in existing_langs]
         
-        if len(existing_langs) == len(all_supported) and all_have_phrases:
+        has_all_languages = len(existing_langs) == len(all_supported)
+        all_languages_have_phrases = len(languages_with_empty_phrases) == 0
+        
+        if has_all_languages and all_languages_have_phrases:
             complete_files += 1
             print(f"✅ {os.path.basename(file_path)}: COMPLETE ({len(existing_langs)}/{len(all_supported)} languages with phrases)")
         else:
             if missing_langs:
+                # ✅ PERBAIKAN: Tampilkan dengan nama bahasa asli
+                missing_display = []
+                for lang_code in missing_langs:
+                    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                    missing_display.append(f"{lang_code} ({lang_name})")
+                
                 print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE ({len(existing_langs)}/{len(all_supported)} languages)")
-                print(f"   Missing: {', '.join(missing_langs)}")
+                print(f"   Missing: {', '.join(missing_display)}")
                 files_with_missing_langs.append((file_path, missing_langs))
-            elif empty_languages:
-                print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE - {len(empty_languages)} languages have empty phrases")
-                print(f"   Empty: {', '.join(empty_languages)}")
-                files_with_empty_phrases.append((file_path, empty_languages))
-            else:
+            
+            if languages_with_empty_phrases:
+                # ✅ PERBAIKAN: Tampilkan dengan nama bahasa asli
+                empty_display = []
+                for lang_code in languages_with_empty_phrases:
+                    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                    empty_display.append(f"{lang_code} ({lang_name})")
+                
+                print(f"⚠️  {os.path.basename(file_path)}: {len(languages_with_empty_phrases)} languages have empty phrases")
+                print(f"   Empty: {', '.join(empty_display)}")
+                files_with_empty_phrases.append((file_path, languages_with_empty_phrases))
+            
+            if not missing_langs and not languages_with_empty_phrases:
                 print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE ({len(existing_langs)}/{len(all_supported)} languages)")
     
     print(f"\n🎯 FINAL SUMMARY: {complete_files}/{len(files)} files have complete language sets with phrases")
     
-    # ✅ PERBAIKAN: Tawarkan untuk memperbaiki semua masalah di semua file
     ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases)
-
 
 # ======================== CLI MODE ========================
 

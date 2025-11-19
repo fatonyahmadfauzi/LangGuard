@@ -14,17 +14,22 @@ import sys
 from deep_translator import GoogleTranslator
 from tqdm import tqdm
 
-
 # ---------------------- DISPLAY LANGUAGE SETTINGS ----------------------
 
 DISPLAY_LANGUAGES = {
-    "kr": {
-        # Korean translations will be added here
+    "en": {
+    # English translations will be added here
+    },
+    "jp": {
+    # 日本語 translations will be added here
+    },
+    "id": {
+    # Indonesia translations will be added here
     }
 }
 
 # Global variable for display language
-DISPLAY_LANG = "kr"
+DISPLAY_LANG = "en"
 
 def set_display_language(lang_code):
     """Set display language for notifications"""
@@ -41,8 +46,8 @@ def t(key, **kwargs):
     try:
         if DISPLAY_LANG in DISPLAY_LANGUAGES and key in DISPLAY_LANGUAGES[DISPLAY_LANG]:
             return DISPLAY_LANGUAGES[DISPLAY_LANG][key].format(**kwargs)
-        elif key in DISPLAY_LANGUAGES["kr"]:
-            return DISPLAY_LANGUAGES["kr"][key].format(**kwargs)
+        elif key in DISPLAY_LANGUAGES["en"]:
+            return DISPLAY_LANGUAGES["en"][key].format(**kwargs)
         else:
             return key
     except Exception:

@@ -12,36 +12,20 @@ try:
     from .analysis import analyze_file, auto_check_all, list_files
     from .clipboard import clipboard_template, create_section
     from .translate import run_translate
-    from .fix_order import fix_language_order
     from .insert_section import run_insert_section
     from .remove_languages import run_remove_languages
     from .repair_functions import run_repair_functions
-    from .update_language import choose_language, set_default_display_language_in_file
-    from .add_languages import (
-        show_all_language_options, 
-        get_language_selection, 
-        add_languages_to_content,
-        show_missing_language_options,      
-        get_missing_language_selection,     
-        get_missing_languages_from_content,
-    )
+    from .update_language import run_set_global_lang
+    from .add_languages import run_add_languages
 except ImportError:
     from analysis import analyze_file, auto_check_all, list_files
     from clipboard import clipboard_template, create_section
     from translate import run_translate
-    from fix_order import fix_language_order
     from insert_section import run_insert_section
     from remove_languages import run_remove_languages
     from repair_functions import run_repair_functions
-    from update_language import choose_language, set_default_display_language_in_file
-    from add_languages import (
-        show_all_language_options, 
-        get_language_selection, 
-        add_languages_to_content,
-        show_missing_language_options,      
-        get_missing_language_selection,     
-        get_missing_languages_from_content,
-    )
+    from update_language import run_set_global_lang
+    from add_languages import run_add_languages
 
 
 def show_banner():
@@ -64,7 +48,6 @@ def main():
     check_parser.add_argument('-a', '--auto', action='store_true', help='Auto-analyze all files')
     
     clipboard_parser = subparsers.add_parser('clipboard', help='Copy template to clipboard (read-only)')
-    # ✅ PERBAIKAN: Sesuaikan dengan parameter yang benar
     clipboard_parser.add_argument('--lang', help='Languages (comma separated)')
 
     translate_parser = subparsers.add_parser('translate', help='Auto-translate missing phrases in DISPLAY_LANGUAGES (modifies file)')
@@ -72,15 +55,9 @@ def main():
     
     version_parser = subparsers.add_parser('version', help='Show version (read-only)')
     
-    # MAINTENANCE COMMANDS (modifies files)
-    fix_order_parser = subparsers.add_parser('fix-order', help='Fix language order in a file (modifies file)')
-    fix_order_parser.add_argument('file', help='File to fix order in')
-    
-    # ✅ UBAH: insert menjadi generate
     generate_parser = subparsers.add_parser('generate', help='Generate complete DISPLAY_LANGUAGES section (modifies file)')
     generate_parser.add_argument('file', help='File to generate section in')
     
-    # ✅ UBAH: remove menjadi remove-lang
     remove_lang_parser = subparsers.add_parser('remove-lang', help='Remove languages from file (modifies file)')
     remove_lang_parser.add_argument('file', help='File to remove languages from')
     
@@ -109,7 +86,6 @@ def main():
     
     elif args.command == 'clipboard':
         languages = None
-        # ✅ PERBAIKAN: Sesuaikan dengan nama parameter yang benar
         if args.lang:
             languages = [lang.strip() for lang in args.lang.split(',')]
         clipboard_template(languages)
@@ -125,20 +101,12 @@ def main():
         print("By Fatony Ahmad Fauzi")
         print("Email: fatonyahmadfauzi@gmail.com")
     
-    elif args.command == 'fix-order':
-        if os.path.exists(args.file):
-            fix_language_order(args.file)
-        else:
-            print(f"❌ File not found: {args.file}")
-            
-    # ✅ UBAH: insert menjadi generate
     elif args.command == 'generate':
         if os.path.exists(args.file):
             run_insert_section(args.file)
         else:
             print(f"❌ File not found: {args.file}")
             
-    # ✅ UBAH: remove menjadi remove-lang
     elif args.command == 'remove-lang':
         if os.path.exists(args.file):
             run_remove_languages(args.file)
@@ -155,23 +123,11 @@ def main():
         if not os.path.exists(args.file):
             print(f"❌ File not found: {args.file}")
         else:
-            # Gunakan fungsi yang sudah ada di update_language.py untuk konsistensi
-            try:
-                from .update_language import run_set_global_lang
-                run_set_global_lang(args.file)
-            except ImportError:
-                from update_language import run_set_global_lang
-                run_set_global_lang(args.file)
+            run_set_global_lang(args.file)
 
-    # Di main.py - bagian add-lang command
     elif args.command == 'add-lang':
         if os.path.exists(args.file):
-            try:
-                from .add_languages import run_add_languages
-                run_add_languages(args.file)
-            except ImportError:
-                from add_languages import run_add_languages
-                run_add_languages(args.file)
+            run_add_languages(args.file)
         else:
             print(f"❌ File not found: {args.file}")
 
@@ -182,7 +138,7 @@ def main():
         print("    langguard check my_script.py       # Analyze DISPLAY_LANGUAGES section")
         print("    langguard check --auto             # Auto-analyze all files")
         print("    langguard clipboard                # Copy complete template to clipboard")
-        print("    langguard clipboard --lang en,id,jp # Copy custom template to clipboard")  # ✅ PERBAIKAN: Sesuaikan dengan parameter yang benar
+        print("    langguard clipboard --lang en,id,jp # Copy custom template to clipboard")
         print("    langguard version                  # Show version information")
         print("")
         print("  MAINTENANCE COMMANDS (modifies files, creates backup):")
@@ -190,7 +146,6 @@ def main():
         print("    langguard add-lang my_script.py    # Add specific missing languages")
         print("    langguard remove-lang my_script.py # Remove languages from section")
         print("    langguard repair my_script.py      # Repair section structure and functions")
-        print("    langguard fix-order my_script.py   # Fix language order only")
         print("    langguard set-global-lang my_script.py # Set default display language")
         print("    langguard translate my_script.py   # Auto-translate missing phrases")
         print("")

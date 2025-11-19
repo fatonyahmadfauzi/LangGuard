@@ -4,8 +4,8 @@ langguard/add_languages.py
 langguard/analysis.py
 langguard/clipboard.py
 langguard/fallback_strategy.py
-langguard/fix_order.py
 langguard/insert_section.py
+langguard/language_selection.py
 langguard/language_utils.py
 langguard/main.py
 langguard/remove_languages.py

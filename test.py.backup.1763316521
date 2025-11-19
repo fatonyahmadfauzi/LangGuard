@@ -17,43 +17,13 @@ from tqdm import tqdm
 # ---------------------- DISPLAY LANGUAGE SETTINGS ----------------------
 
 DISPLAY_LANGUAGES = {
-    "en": {
-    # English translations will be added globally later
-    },
-    "pl": {
-    # Polski translations will be added globally later
-    },
     "zh": {
-    # 中文 translations will be added globally later
-    },
-    "jp": {
-    # 日本語 translations will be added globally later
-    },
-    "de": {
-    # Deutsch translations will be added globally later
-    },
-    "fr": {
-    # Français translations will be added globally later
-    },
-    "es": {
-    # Español translations will be added globally later
-    },
-    "ru": {
-    # Pycckuñ translations will be added globally later
-    },
-    "pt": {
-    # Portugués translations will be added globally later
-    },
-    "id": {
-    # Indonesia translations will be added globally later
-    },
-    "kr": {
-    # 한국어 translations will be added here
+        # 中文 translations will be added here
     }
 }
 
-# 🌐 Display Language Control
-DISPLAY_LANG = "ru"
+# Global variable for display language
+DISPLAY_LANG = "id"
 
 def set_display_language(lang_code):
     """Set display language for notifications"""
@@ -70,8 +40,74 @@ def t(key, **kwargs):
     try:
         if DISPLAY_LANG in DISPLAY_LANGUAGES and key in DISPLAY_LANGUAGES[DISPLAY_LANG]:
             return DISPLAY_LANGUAGES[DISPLAY_LANG][key].format(**kwargs)
-        elif key in DISPLAY_LANGUAGES["ru"]:
-            return DISPLAY_LANGUAGES["ru"][key].format(**kwargs)
+        elif key in DISPLAY_LANGUAGES["id"]:
+            return DISPLAY_LANGUAGES["id"][key].format(**kwargs)
+        else:
+            return key
+    except Exception:
+        return key
+
+def get_display_language():
+    """Get current display language"""
+    return DISPLAY_LANG
+
+def get_available_languages():
+    """Get list of available languages"""
+    return list(DISPLAY_LANGUAGES.keys())
+
+# Global variable for display language
+DISPLAY_LANG = "zh"
+
+def set_display_language(lang_code):
+    """Set display language for notifications"""
+    global DISPLAY_LANG
+    if lang_code in DISPLAY_LANGUAGES:
+        DISPLAY_LANG = lang_code
+        print(f"✅ Display language set to: {lang_code}")
+    else:
+        print(f"❌ Language '{lang_code}' not supported. Using English.")
+
+def t(key, **kwargs):
+    """Translation function for notifications"""
+    global DISPLAY_LANG
+    try:
+        if DISPLAY_LANG in DISPLAY_LANGUAGES and key in DISPLAY_LANGUAGES[DISPLAY_LANG]:
+            return DISPLAY_LANGUAGES[DISPLAY_LANG][key].format(**kwargs)
+        elif key in DISPLAY_LANGUAGES["zh"]:
+            return DISPLAY_LANGUAGES["zh"][key].format(**kwargs)
+        else:
+            return key
+    except Exception:
+        return key
+
+def get_display_language():
+    """Get current display language"""
+    return DISPLAY_LANG
+
+def get_available_languages():
+    """Get list of available languages"""
+    return list(DISPLAY_LANGUAGES.keys())
+
+# Global variable for display language
+DISPLAY_LANG = "kr"
+
+def set_display_language(lang_code):
+    """Set display language for notifications"""
+    global DISPLAY_LANG
+    if lang_code in DISPLAY_LANGUAGES:
+        DISPLAY_LANG = lang_code
+        print(f"✅ Display language set to: {lang_code}")
+    else:
+        print(f"❌ Language '{lang_code}' not supported. Using English.")
+
+def t(key, **kwargs):
+    """Translation function for notifications"""
+    global DISPLAY_LANG
+    try:
+        if DISPLAY_LANG in DISPLAY_LANGUAGES and key in DISPLAY_LANGUAGES[DISPLAY_LANG]:
+            return DISPLAY_LANGUAGES[DISPLAY_LANG][key].format(**kwargs)
+        elif key in DISPLAY_LANGUAGES["kr"]:
+            return DISPLAY_LANGUAGES["kr"][key].format(**kwargs)
         else:
             return key
     except Exception:

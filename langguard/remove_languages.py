@@ -8,6 +8,12 @@ import os
 import re
 import sys
 
+# ✅ IMPORT BARU - tambahkan language_selection
+try:
+    from .language_selection import select_languages_for_removal
+except ImportError:
+    from language_selection import select_languages_for_removal
+
 def get_all_supported_languages():
     return ["en", "pl", "zh", "jp", "de", "fr", "es", "ru", "pt", "id", "kr"]
 
@@ -52,100 +58,6 @@ def check_existing_languages(content):
     
     print(f"✅ Found {len(existing_languages)} existing languages: {', '.join(existing_languages)}")
     return existing_languages
-
-def show_current_languages_options(existing_languages, current_display_lang):
-    """Tampilkan pilihan bahasa yang ada - dengan penanda bahasa default"""
-    
-    print("\n🎯 CURRENT LANGUAGE OPTIONS:")
-    print("=" * 50)
-    
-    language_names = {
-        "en": "English", "pl": "Polski", "zh": "中文", "jp": "日本語",
-        "de": "Deutsch", "fr": "Français", "es": "Español", "ru": "Pycckuñ",
-        "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
-    }
-    
-    for i, lang_code in enumerate(existing_languages, 1):
-        lang_name = language_names.get(lang_code, lang_code)
-        default_indicator = " ⭐ (CURRENT DEFAULT)" if lang_code == current_display_lang else ""
-        print(f"  {i}. {lang_code} - {lang_name}{default_indicator}")
-    
-    print("=" * 50)
-    print(f"💡 Bahasa default ({current_display_lang}) tidak dapat dihapus!")
-
-def get_language_selection_for_remove(existing_languages, current_display_lang):
-    """Dapatkan pilihan bahasa untuk dihapus - dengan proteksi bahasa default"""
-    
-    while True:
-        print(f"\n👉 Enter your choice:")
-        print("   - Single number (e.g., 1)")
-        print("   - Multiple numbers separated by comma (e.g., 1,3,5)") 
-        print("   - 'A' for all removable languages")
-        print("   - 'T' to remove entire DISPLAY_LANGUAGES section")
-        print("   - 'S' to skip")
-        
-        choice = input("Your choice: ").strip().upper()
-        
-        if choice == 'A':
-            # Hapus semua bahasa KECUALI bahasa default
-            removable_langs = [lang for lang in existing_languages if lang != current_display_lang]
-            if not removable_langs:
-                print("❌ Tidak ada bahasa yang dapat dihapus (hanya tersisa bahasa default)")
-                return []
-            return removable_langs
-        elif choice == 'T':
-            # Konfirmasi penghapusan seluruh section
-            confirm = input("⚠️  PERINGATAN: Ini akan menghapus SELURUH bagian DISPLAY_LANGUAGES! Lanjutkan? (y/N): ").strip().lower()
-            if confirm == 'y':
-                return "REMOVE_ALL_SECTION"
-            else:
-                print("ℹ️ Penghapusan section dibatalkan")
-                continue
-        elif choice == 'S':
-            return []
-        elif ',' in choice:
-            # Multiple selection
-            selected_numbers = [num.strip() for num in choice.split(',')]
-            selected_languages = []
-            
-            valid_selection = True
-            for num_str in selected_numbers:
-                if num_str.isdigit():
-                    index = int(num_str) - 1
-                    if 0 <= index < len(existing_languages):
-                        lang_code = existing_languages[index]
-                        if lang_code == current_display_lang:
-                            print(f"❌ Tidak dapat menghapus bahasa default: {lang_code}")
-                            valid_selection = False
-                            break
-                        if lang_code not in selected_languages:
-                            selected_languages.append(lang_code)
-                    else:
-                        print(f"❌ Invalid number: {num_str}. Please enter numbers between 1 and {len(existing_languages)}")
-                        valid_selection = False
-                        break
-                else:
-                    print(f"❌ Invalid input: {num_str}. Please enter numbers only.")
-                    valid_selection = False
-                    break
-            
-            if valid_selection and selected_languages:
-                return selected_languages
-            else:
-                print("❌ No valid languages selected")
-        elif choice.isdigit():
-            # Single selection
-            index = int(choice) - 1
-            if 0 <= index < len(existing_languages):
-                lang_code = existing_languages[index]
-                if lang_code == current_display_lang:
-                    print(f"❌ Tidak dapat menghapus bahasa default: {lang_code}")
-                    continue
-                return [lang_code]
-            else:
-                print(f"❌ Please enter number between 1 and {len(existing_languages)}")
-        else:
-            print("❌ Invalid choice. Please enter a number, multiple numbers separated by comma, 'A', 'T', or 'S'")
 
 def extract_language_content(dict_content):
     """Ekstrak konten setiap bahasa dengan method yang reliable"""
@@ -409,11 +321,8 @@ def run_remove_languages(target_file):
     
     print(f"\n📊 Currently have {len(existing_languages)} languages: {', '.join(existing_languages)}")
     
-    # Tampilkan pilihan bahasa dengan penanda bahasa default
-    show_current_languages_options(existing_languages, current_display_lang)
-    
-    # Dapatkan pilihan bahasa untuk dihapus
-    languages_to_remove = get_language_selection_for_remove(existing_languages, current_display_lang)
+    # ✅ GUNAKAN FUNGSI TERPUSAT untuk pemilihan bahasa removal
+    languages_to_remove = select_languages_for_removal(existing_languages, current_display_lang)
     
     if not languages_to_remove:
         print("ℹ️ No languages selected for removal")

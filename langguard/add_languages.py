@@ -16,12 +16,22 @@ try:
         get_existing_languages_from_content,
         extract_english_phrases
     )
+    from .language_selection import (
+        show_language_selection,
+        get_user_language_selection,
+        select_languages_for_addition
+    )
 except ImportError:
     from language_utils import (
         get_all_supported_languages,
         get_correct_language_order,
         get_existing_languages_from_content,
         extract_english_phrases
+    )
+    from language_selection import (
+        show_language_selection,
+        get_user_language_selection,
+        select_languages_for_addition
     )
 
 def extract_phrases_for_language(content, lang_code):
@@ -41,136 +51,6 @@ def extract_phrases_for_language(content, lang_code):
         all_phrases.update(phrase_list)
     
     return all_phrases
-
-def show_all_language_options():
-    """Tampilkan semua bahasa yang tersedia"""
-    print("\n🎯 AVAILABLE LANGUAGES:")
-    print("=" * 50)
-    
-    language_names = {
-        "en": "English", "pl": "Polski", "zh": "中文", "jp": "日本語",
-        "de": "Deutsch", "fr": "Français", "es": "Español", "ru": "Pycckuñ",
-        "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
-    }
-    
-    all_langs = get_all_supported_languages()
-    for i, lang_code in enumerate(all_langs, 1):
-        lang_name = language_names.get(lang_code, lang_code)
-        print(f"  {i}. {lang_code} - {lang_name}")
-    
-    print("=" * 50)
-
-def show_missing_language_options(missing_langs):
-    """Tampilkan hanya bahasa-bahasa yang missing/masih belum ada"""
-    print("\n🎯 ADD MISSING LANGUAGES:")
-    print("=" * 50)
-    
-    language_names = {
-        "en": "English", "pl": "Polski", "zh": "中文", "jp": "日本語",
-        "de": "Deutsch", "fr": "Français", "es": "Español", "ru": "Pycckuñ",
-        "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
-    }
-    
-    correct_order = get_correct_language_order()
-    sorted_missing = [lang for lang in correct_order if lang in missing_langs]
-    
-    for i, lang_code in enumerate(sorted_missing, 1):
-        lang_name = language_names.get(lang_code, lang_code)
-        print(f"  {i}. {lang_code} - {lang_name}")
-    
-    print("=" * 50)
-
-def get_language_selection():
-    """Dapatkan pilihan bahasa dari user (semua bahasa)"""
-    while True:
-        print("\n👉 Enter your choice:")
-        print("   - Single number (e.g., 1)")
-        print("   - Multiple numbers separated by comma (e.g., 1,3,5)")
-        print("   - 'A' for all languages")
-        print("   - 'S' to skip")
-        
-        choice = input("Your choice: ").strip().upper()
-        
-        if choice == 'A':
-            return get_all_supported_languages()
-        elif choice == 'S':
-            return []
-        elif ',' in choice:
-            selected_numbers = [num.strip() for num in choice.split(',')]
-            selected_languages = []
-            all_langs = get_all_supported_languages()
-            
-            for num_str in selected_numbers:
-                if num_str.isdigit():
-                    index = int(num_str) - 1
-                    if 0 <= index < len(all_langs):
-                        lang_code = all_langs[index]
-                        if lang_code not in selected_languages:
-                            selected_languages.append(lang_code)
-                    else:
-                        print(f"❌ Invalid number: {num_str}")
-                        return []
-                else:
-                    print(f"❌ Invalid input: {num_str}")
-                    return []
-            
-            correct_order = get_correct_language_order()
-            return [lang for lang in correct_order if lang in selected_languages]
-        elif choice.isdigit():
-            index = int(choice) - 1
-            all_langs = get_all_supported_languages()
-            if 0 <= index < len(all_langs):
-                return [all_langs[index]]
-            else:
-                print(f"❌ Please enter a number between 1 and {len(all_langs)}")
-        else:
-            print("❌ Invalid choice.")
-
-def get_missing_language_selection(missing_langs):
-    """Dapatkan pilihan bahasa dari daftar missing languages"""
-    correct_order = get_correct_language_order()
-    sorted_missing = [lang for lang in correct_order if lang in missing_langs]
-    
-    while True:
-        print(f"\n👉 Enter your choice:")
-        print("   - Single number (e.g., 1)")
-        print("   - Multiple numbers separated by comma (e.g., 1,3,5)")
-        print("   - 'A' for all missing languages")
-        print("   - 'S' to skip")
-        
-        choice = input("Your choice: ").strip().upper()
-        
-        if choice == 'A':
-            return sorted_missing
-        elif choice == 'S':
-            return []
-        elif ',' in choice:
-            selected_numbers = [num.strip() for num in choice.split(',')]
-            selected_languages = []
-            
-            for num_str in selected_numbers:
-                if num_str.isdigit():
-                    index = int(num_str) - 1
-                    if 0 <= index < len(sorted_missing):
-                        lang_code = sorted_missing[index]
-                        if lang_code not in selected_languages:
-                            selected_languages.append(lang_code)
-                    else:
-                        print(f"❌ Invalid number: {num_str}")
-                        return []
-                else:
-                    print(f"❌ Invalid input: {num_str}")
-                    return []
-            
-            return [lang for lang in correct_order if lang in selected_languages]
-        elif choice.isdigit():
-            index = int(choice) - 1
-            if 0 <= index < len(sorted_missing):
-                return [sorted_missing[index]]
-            else:
-                print(f"❌ Please enter number between 1 and {len(sorted_missing)}")
-        else:
-            print("❌ Invalid choice.")
 
 def get_missing_languages_from_content(content):
     """Dapatkan daftar bahasa yang missing dari konten file"""
@@ -520,9 +400,9 @@ def run_add_languages(target_file):
     print(f"📊 Current languages: {', '.join(existing_langs)}")
     print(f"💡 Found {len(missing_langs)} missing languages: {', '.join(missing_langs)}")
     
-    # Tampilkan pilihan bahasa yang missing
-    show_missing_language_options(missing_langs)
-    selected_langs = get_missing_language_selection(missing_langs)
+    # ✅ GUNAKAN FUNGSI TERPUSAT untuk pemilihan bahasa missing
+    show_language_selection(available_langs=missing_langs, context="add")
+    selected_langs = get_user_language_selection(available_langs=missing_langs, allow_multiple=True, context="add")
     
     if selected_langs:
         new_content = add_languages_to_content(old_content, selected_langs)
