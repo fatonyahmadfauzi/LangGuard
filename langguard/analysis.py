@@ -281,7 +281,6 @@ def analyze_js_i18n_file(file_path):
         print(f"❌ Error during JS analysis: {e}")
         return False
 
-
 def get_js_incomplete_languages(content):
     """Return JS languages with key count lower than English reference."""
     english_keys = extract_js_english_keys(content)
@@ -1401,7 +1400,6 @@ def auto_check_all(target_path='.'):
                 print(f"   Empty: {', '.join(empty_display)}")
                 if not file_path.endswith('.js'):
                     files_with_empty_phrases.append((file_path, languages_with_empty_phrases))
-
             if incomplete_js:
                 print(f"⚠️  {os.path.basename(file_path)}: {len(incomplete_js)} languages have incomplete key coverage vs EN")
                 for lang_code, current_count, expected_count in incomplete_js:

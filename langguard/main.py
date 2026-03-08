@@ -59,7 +59,6 @@ def ask_file_path(label="target file"):
         return None
     return file_path
 
-
 def run_interactive_menu():
     while True:
         show_banner()
