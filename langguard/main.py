@@ -28,39 +28,158 @@ except ImportError:
     from add_languages import run_add_languages
 
 
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
 def show_banner():
-    print("🛡️ LangGuard - Multilingual Dictionary Guardian")
-    print("Author: Fatony Ahmad Fauzi")
-    print("Email: fatonyahmadfauzi@gmail.com")
-    print("=" * 50)
+    print(f"{CYAN}" + "=" * 78 + f"{RESET}")
+    print(f"{GREEN}" + r"""
+ _                               _____                     _
+| |                             / ____|                   | |
+| |      __ _ _ __   __ _      | |  __ _   _  __ _ _ __ __| |
+| |     / _` | '_ \ / _` |     | | |_ | | | |/ _` | '__/ _` |
+| |____| (_| | | | | (_| |     | |__| | |_| | (_| | | | (_| |
+|______|\__,_|_| |_|\__, |      \_____|\__,_|\__,_|_|  \__,_|
+                     __/ |
+                    |___/
+""" + f"{RESET}")
+    print("Multilingual Dictionary Guardian")
+    print("Developer: Fatony Ahmad Fauzi")
+    print(f"{CYAN}" + "=" * 78 + f"{RESET}")
+
+
+def ask_file_path(label="target file"):
+    file_path = input(f"{YELLOW}[+] Enter {label}: {RESET}").strip()
+    if not file_path:
+        print("❌ File path cannot be empty")
+        return None
+    return file_path
+
+
+def run_interactive_menu():
+    while True:
+        show_banner()
+        print(f"{GREEN}[1] Check file / auto-check")
+        print("[2] Clipboard template")
+        print("[3] Generate DISPLAY_LANGUAGES section")
+        print("[4] Add missing languages")
+        print("[5] Remove languages")
+        print("[6] Set global language")
+        print("[7] Repair functions/section")
+        print("[8] Auto-translate missing phrases")
+        print("[9] Version")
+        print(f"{GRAY}[0] Exit{RESET}")
+
+        choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
+
+        if choice == "0":
+            print("👋 Bye!")
+            return
+
+        if choice == "1":
+            mode = input("Use auto mode? (y/N): ").strip().lower()
+            if mode in ["y", "yes"]:
+                auto_check_all()
+            else:
+                file_path = ask_file_path("python file")
+                if file_path and os.path.exists(file_path):
+                    analyze_file(file_path)
+                elif file_path:
+                    print(f"❌ File not found: {file_path}")
+
+        elif choice == "2":
+            custom_lang = input("Languages (comma separated, empty=all): ").strip()
+            languages = [lang.strip() for lang in custom_lang.split(',')] if custom_lang else None
+            clipboard_template(languages)
+
+        elif choice == "3":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                run_insert_section(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "4":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                run_add_languages(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "5":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                run_remove_languages(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "6":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                run_set_global_lang(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "7":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                run_repair_functions(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "8":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                run_translate(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "9":
+            print("LangGuard v1.0.0")
+            print("By Fatony Ahmad Fauzi")
+            print("Email: fatonyahmadfauzi@gmail.com")
+
+        else:
+            print("❌ Invalid option")
+
+        input("\nPress Enter to continue...")
+        print("\n" * 2)
 
 
 def main():
+    if len(sys.argv) == 1:
+        run_interactive_menu()
+        return
+
     show_banner()
-    
+
     parser = argparse.ArgumentParser(description='LangGuard - Multilingual Dictionary Guardian')
-    
+
     subparsers = parser.add_subparsers(dest='command', help='Commands')
-    
+
     # ANALYSIS COMMANDS (read-only)
     check_parser = subparsers.add_parser('check', help='Analyze DISPLAY_LANGUAGES section (read-only)')
     check_parser.add_argument('file', nargs='?', help='Python file to analyze (optional for auto)')
     check_parser.add_argument('-a', '--auto', action='store_true', help='Auto-analyze all files')
-    
+
     clipboard_parser = subparsers.add_parser('clipboard', help='Copy template to clipboard (read-only)')
     clipboard_parser.add_argument('--lang', help='Languages (comma separated)')
 
     translate_parser = subparsers.add_parser('translate', help='Auto-translate missing phrases in DISPLAY_LANGUAGES (modifies file)')
     translate_parser.add_argument('file', help='File to translate phrases in')
-    
+
     version_parser = subparsers.add_parser('version', help='Show version (read-only)')
-    
+
     generate_parser = subparsers.add_parser('generate', help='Generate complete DISPLAY_LANGUAGES section (modifies file)')
     generate_parser.add_argument('file', help='File to generate section in')
-    
+
     remove_lang_parser = subparsers.add_parser('remove-lang', help='Remove languages from file (modifies file)')
     remove_lang_parser.add_argument('file', help='File to remove languages from')
-    
+
     repair_parser = subparsers.add_parser('repair', help='Repair functions only (modifies file)')
     repair_parser.add_argument('file', help='File to repair functions in')
 
@@ -69,9 +188,9 @@ def main():
 
     add_lang_parser = subparsers.add_parser('add-lang', help='Add missing languages to existing DISPLAY_LANGUAGES (modifies file)')
     add_lang_parser.add_argument('file', help='File to add languages to')
-    
+
     args = parser.parse_args()
-    
+
     # COMMAND ROUTING
     if args.command == 'check':
         if args.auto:
@@ -83,7 +202,7 @@ def main():
                 print(f"❌ File not found: {args.file}")
         else:
             print("❌ Specify file or use --auto")
-    
+
     elif args.command == 'clipboard':
         languages = None
         if args.lang:
@@ -95,24 +214,24 @@ def main():
             run_translate(args.file)
         else:
             print(f"❌ File not found: {args.file}")
-    
+
     elif args.command == 'version':
         print("LangGuard v1.0.0")
         print("By Fatony Ahmad Fauzi")
         print("Email: fatonyahmadfauzi@gmail.com")
-    
+
     elif args.command == 'generate':
         if os.path.exists(args.file):
             run_insert_section(args.file)
         else:
             print(f"❌ File not found: {args.file}")
-            
+
     elif args.command == 'remove-lang':
         if os.path.exists(args.file):
             run_remove_languages(args.file)
         else:
             print(f"❌ File not found: {args.file}")
-    
+
     elif args.command == 'repair':
         if os.path.exists(args.file):
             run_repair_functions(args.file)
@@ -150,6 +269,7 @@ def main():
         print("    langguard translate my_script.py   # Auto-translate missing phrases")
         print("")
         print("💡 TIP: Use 'check' first to see current status before making changes.")
+
 
 if __name__ == "__main__":
     main()
