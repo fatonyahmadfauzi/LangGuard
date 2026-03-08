@@ -281,6 +281,21 @@ def analyze_js_i18n_file(file_path):
         print(f"❌ Error during JS analysis: {e}")
         return False
 
+def get_js_incomplete_languages(content):
+    """Return JS languages with key count lower than English reference."""
+    english_keys = extract_js_english_keys(content)
+    if not english_keys:
+        return []
+
+    incomplete = []
+    for lang in extract_js_i18n_languages(content):
+        if lang == 'en':
+            continue
+        lang_keys = extract_js_lang_keys(content, lang)
+        if len(lang_keys) < len(english_keys):
+            incomplete.append((lang, len(lang_keys), len(english_keys)))
+    return incomplete
+
 def should_check_file(file_path):
     """Tentukan apakah file harus diperiksa DISPLAY_LANGUAGES-nya"""
     
@@ -1270,7 +1285,8 @@ def list_files(quiet=False, search_subfolders=True, target_path='.'):
 
                 if file_path.endswith('.js'):
                     existing_langs = extract_js_i18n_languages(content)
-                    all_have_phrases = len(extract_js_english_keys(content)) > 0
+                    english_keys = extract_js_english_keys(content)
+                    all_have_phrases = len(english_keys) > 0 and len(get_js_incomplete_languages(content)) == 0
                 else:
                     # ✅ GUNAKAN FUNGSI DARI language_utils
                     existing_langs = get_existing_languages_from_content(content)
@@ -1333,9 +1349,11 @@ def auto_check_all(target_path='.'):
         if file_path.endswith('.js'):
             existing_langs = extract_js_i18n_languages(content)
             english_keys = extract_js_english_keys(content)
+            incomplete_js = get_js_incomplete_languages(content)
             languages_with_empty_phrases = [] if english_keys else ['en']
         else:
             existing_langs = get_existing_languages_from_content(content)
+            incomplete_js = []
 
             # Cek bahasa yang memiliki phrases kosong
             languages_with_empty_phrases = []
@@ -1353,7 +1371,7 @@ def auto_check_all(target_path='.'):
         missing_langs = [lang for lang in all_supported if lang not in existing_langs]
         
         has_all_languages = len(existing_langs) == len(all_supported)
-        all_languages_have_phrases = len(languages_with_empty_phrases) == 0
+        all_languages_have_phrases = len(languages_with_empty_phrases) == 0 and len(incomplete_js) == 0
         
         if has_all_languages and all_languages_have_phrases:
             complete_files += 1
@@ -1382,6 +1400,11 @@ def auto_check_all(target_path='.'):
                 print(f"   Empty: {', '.join(empty_display)}")
                 if not file_path.endswith('.js'):
                     files_with_empty_phrases.append((file_path, languages_with_empty_phrases))
+            if incomplete_js:
+                print(f"⚠️  {os.path.basename(file_path)}: {len(incomplete_js)} languages have incomplete key coverage vs EN")
+                for lang_code, current_count, expected_count in incomplete_js:
+                    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                    print(f"   - {lang_code} ({lang_name}): {current_count}/{expected_count} keys")
             
             if not missing_langs and not languages_with_empty_phrases:
                 print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE ({len(existing_langs)}/{len(all_supported)} languages)")
