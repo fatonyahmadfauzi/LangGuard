@@ -59,7 +59,6 @@ def ask_file_path(label="target file"):
         return None
     return file_path
 
-
 def run_interactive_menu():
     while True:
         show_banner()
@@ -83,7 +82,8 @@ def run_interactive_menu():
         if choice == "1":
             mode = input("Use auto mode? (y/N): ").strip().lower()
             if mode in ["y", "yes"]:
-                auto_check_all()
+                target = input("Target folder/file path (empty=current folder): ").strip()
+                auto_check_all(target_path=target or '.')
             else:
                 file_path = ask_file_path("python file")
                 if file_path and os.path.exists(file_path):
@@ -165,6 +165,7 @@ def main():
     check_parser = subparsers.add_parser('check', help='Analyze DISPLAY_LANGUAGES section (read-only)')
     check_parser.add_argument('file', nargs='?', help='Python file to analyze (optional for auto)')
     check_parser.add_argument('-a', '--auto', action='store_true', help='Auto-analyze all files')
+    check_parser.add_argument('-t', '--target', help='Target folder/file for auto-check (default: current folder)')
 
     clipboard_parser = subparsers.add_parser('clipboard', help='Copy template to clipboard (read-only)')
     clipboard_parser.add_argument('--lang', help='Languages (comma separated)')
@@ -194,7 +195,7 @@ def main():
     # COMMAND ROUTING
     if args.command == 'check':
         if args.auto:
-            auto_check_all()
+            auto_check_all(target_path=args.target or '.')
         elif args.file:
             if os.path.exists(args.file):
                 analyze_file(args.file)
@@ -256,6 +257,7 @@ def main():
         print("  ANALYSIS COMMANDS (read-only, safe to run):")
         print("    langguard check my_script.py       # Analyze DISPLAY_LANGUAGES section")
         print("    langguard check --auto             # Auto-analyze all files")
+        print("    langguard check --auto --target C:/path/to/folder # Auto-check specific folder")
         print("    langguard clipboard                # Copy complete template to clipboard")
         print("    langguard clipboard --lang en,id,jp # Copy custom template to clipboard")
         print("    langguard version                  # Show version information")

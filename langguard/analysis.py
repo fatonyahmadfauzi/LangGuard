@@ -1149,14 +1149,19 @@ def analyze_file(file_path):
         traceback.print_exc()
         return False
 
-def list_files(quiet=False, search_subfolders=True):
-    """List files with DISPLAY_LANGUAGES - REKURSIF di semua subfolder"""
+def list_files(quiet=False, search_subfolders=True, target_path='.'):
+    """List files with DISPLAY_LANGUAGES/JS I18N - recursive from target path."""
     if not quiet:
         print("🔍 Searching for files with DISPLAY_LANGUAGES...")
         if search_subfolders:
             print("📁 Searching in current folder and all subfolders...")
         else:
             print("📁 Searching in current folder only...")
+
+    if not os.path.exists(target_path):
+        if not quiet:
+            print(f"❌ Target path not found: {target_path}")
+        return []
     
     found_files = []
     
@@ -1246,7 +1251,11 @@ def list_files(quiet=False, search_subfolders=True):
                 print(f"⚠️  Error scanning {directory}: {e}")
     
     # Mulai pencarian
-    search_in_directory('.')
+    if os.path.isfile(target_path):
+        search_in_directory(os.path.dirname(target_path) or '.')
+        found_files = [fp for fp in found_files if os.path.abspath(fp) == os.path.abspath(target_path)]
+    else:
+        search_in_directory(target_path)
     
     if not quiet:
         if found_files:
@@ -1300,10 +1309,10 @@ LANGUAGE_NAMES = {
     "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
 }
 
-def auto_check_all():
+def auto_check_all(target_path='.'):
     """Automatically check all Python/JS files with i18n language blocks"""
     print("🔍 Auto-checking all files...")
-    files = list_files(quiet=True, search_subfolders=True)
+    files = list_files(quiet=True, search_subfolders=True, target_path=target_path)
     
     if not files:
         print("❌ No files with DISPLAY_LANGUAGES/JS I18N found")
