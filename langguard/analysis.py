@@ -67,6 +67,366 @@ def is_valid_display_languages_section(content):
     
     return has_required_functions
 
+
+
+
+def _js_canonical_lang(code):
+    if code == 'ja':
+        return 'jp'
+    if code == 'ko':
+        return 'kr'
+    return code
+
+
+def _js_supported_langs_for_content(content, existing_langs=None):
+    supported = list(get_all_supported_languages())
+    existing = set(existing_langs or [])
+    if ('ja' in existing) or ('"ja"' in content) or ("'ja'" in content):
+        supported = ['ja' if c == 'jp' else c for c in supported]
+    if ('ko' in existing) or ('"ko"' in content) or ("'ko'" in content):
+        supported = ['ko' if c == 'kr' else c for c in supported]
+    return supported
+
+
+def _extract_js_dict_content(content):
+    dict_match = re.search(r'(?:const|let|var)\s+(?:I18N|DISPLAY_LANGUAGES)\s*=\s*\{', content)
+    if not dict_match:
+        return ''
+
+    start = dict_match.end() - 1
+    brace_count = 0
+    in_string = False
+    escape_next = False
+    quote_char = ''
+    block_chars = []
+
+    for i in range(start, len(content)):
+        ch = content[i]
+
+        if escape_next:
+            if brace_count >= 1:
+                block_chars.append(ch)
+            escape_next = False
+            continue
+
+        if in_string:
+            if brace_count >= 1:
+                block_chars.append(ch)
+            if ch == '\\':
+                escape_next = True
+            elif ch == quote_char:
+                in_string = False
+                quote_char = ''
+            continue
+
+        if ch in ('"', "'"):
+            in_string = True
+            quote_char = ch
+            if brace_count >= 1:
+                block_chars.append(ch)
+            continue
+
+        if ch == '{':
+            brace_count += 1
+            if brace_count > 1:
+                block_chars.append(ch)
+            continue
+
+        if ch == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                break
+            block_chars.append(ch)
+            continue
+
+        if brace_count >= 1:
+            block_chars.append(ch)
+
+    return ''.join(block_chars)
+
+def is_valid_js_i18n_section(content):
+    """Check if content has basic JS i18n structure (LANG_ORDER + I18N/DISPLAY_LANGUAGES)."""
+    has_dict = re.search(r'(?:const|let|var)\s+(?:I18N|DISPLAY_LANGUAGES)\s*=\s*\{', content) is not None
+    return (
+        'const LANG_ORDER' in content and
+        has_dict and
+        re.search(r'\ben\s*:\s*\{', content) is not None
+    )
+
+
+def extract_js_i18n_languages(content):
+    """Extract language keys from JavaScript i18n dictionary object."""
+    dict_content = _extract_js_dict_content(content)
+    js_langs = re.findall(r'\b([a-z]{2})\s*:\s*\{', dict_content)
+    ordered = []
+    for code in js_langs:
+        if code not in ordered:
+            ordered.append(code)
+    return ordered
+
+
+def extract_js_lang_keys(content, lang_code):
+    """Extract top-level key names for a given language in JS I18N object."""
+    dict_content = _extract_js_dict_content(content)
+    lang_match = re.search(rf'\b{lang_code}\s*:\s*\{{', dict_content)
+    if not lang_match:
+        return set()
+
+    start = lang_match.end() - 1  # position of '{'
+    brace_count = 0
+    in_string = False
+    escape_next = False
+    quote_char = ''
+    block_chars = []
+
+    for i in range(start, len(dict_content)):
+        ch = dict_content[i]
+
+        if escape_next:
+            block_chars.append(ch)
+            escape_next = False
+            continue
+
+        if in_string:
+            block_chars.append(ch)
+            if ch == '\\':
+                escape_next = True
+            elif ch == quote_char:
+                in_string = False
+                quote_char = ''
+            continue
+
+        if ch in ('"', "'"):
+            in_string = True
+            quote_char = ch
+            block_chars.append(ch)
+            continue
+
+        if ch == '{':
+            brace_count += 1
+            if brace_count > 1:
+                block_chars.append(ch)
+            continue
+
+        if ch == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                break
+            block_chars.append(ch)
+            continue
+
+        if brace_count >= 1:
+            block_chars.append(ch)
+
+    lang_block = ''.join(block_chars)
+
+    # Split properties at top-level commas (ignore nested objects/arrays/strings)
+    props = []
+    current = []
+    obj_depth = 0
+    arr_depth = 0
+    paren_depth = 0
+    in_string = False
+    escape_next = False
+    quote_char = ''
+
+    for ch in lang_block:
+        if escape_next:
+            current.append(ch)
+            escape_next = False
+            continue
+
+        if in_string:
+            current.append(ch)
+            if ch == '\\':
+                escape_next = True
+            elif ch == quote_char:
+                in_string = False
+                quote_char = ''
+            continue
+
+        if ch in ('"', "'"):
+            in_string = True
+            quote_char = ch
+            current.append(ch)
+            continue
+
+        if ch == '{':
+            obj_depth += 1
+            current.append(ch)
+            continue
+        if ch == '}':
+            obj_depth = max(0, obj_depth - 1)
+            current.append(ch)
+            continue
+        if ch == '[':
+            arr_depth += 1
+            current.append(ch)
+            continue
+        if ch == ']':
+            arr_depth = max(0, arr_depth - 1)
+            current.append(ch)
+            continue
+        if ch == '(':
+            paren_depth += 1
+            current.append(ch)
+            continue
+        if ch == ')':
+            paren_depth = max(0, paren_depth - 1)
+            current.append(ch)
+            continue
+
+        if ch == ',' and obj_depth == 0 and arr_depth == 0 and paren_depth == 0:
+            prop = ''.join(current).strip()
+            if prop:
+                props.append(prop)
+            current = []
+            continue
+
+        current.append(ch)
+
+    tail = ''.join(current).strip()
+    if tail:
+        props.append(tail)
+
+    keys = []
+    for prop in props:
+        m = re.match(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:', prop)
+        if m:
+            keys.append(m.group(1))
+    return set(keys)
+
+
+def extract_js_english_keys(content):
+    """Extract top-level keys from `en: { ... }` in JS I18N object."""
+    return extract_js_lang_keys(content, 'en')
+
+
+def analyze_js_i18n_file(file_path):
+    """Analyze JavaScript file that uses LANG_ORDER + I18N object."""
+    print(f"🔍 Analyzing JavaScript i18n: {file_path}")
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        if not is_valid_js_i18n_section(content):
+            print("❌ JS i18n pattern not found. Expected: const LANG_ORDER + const I18N + en section")
+            return False
+
+        existing_langs = extract_js_i18n_languages(content)
+        all_supported = _js_supported_langs_for_content(content, existing_langs)
+        existing_canonical = {_js_canonical_lang(l) for l in existing_langs}
+        missing_langs = [lang for lang in all_supported if _js_canonical_lang(lang) not in existing_canonical]
+
+        print(f"📊 Language Analysis for JS file: {file_path}")
+        print("=" * 60)
+        print(f"✅ Total languages found: {len(existing_langs)}")
+        print(f"🌍 Languages present: {', '.join(existing_langs)}")
+
+        if missing_langs:
+            print(f"⚠️  Missing languages ({len(missing_langs)}): {', '.join(missing_langs)}")
+        else:
+            print("✅ No missing languages")
+
+        # Cek key coverage berdasarkan English
+        english_keys = extract_js_english_keys(content)
+        if not english_keys:
+            print("⚠️  English (en) section has no detectable keys.")
+            return True
+
+        print(f"🔑 English key count: {len(english_keys)}")
+        incomplete = []
+        for lang in existing_langs:
+            if lang == 'en':
+                continue
+
+            lang_keys = extract_js_lang_keys(content, lang)
+            if not lang_keys:
+                incomplete.append((lang, 0))
+                continue
+
+            if len(lang_keys) < len(english_keys):
+                incomplete.append((lang, len(lang_keys)))
+
+        if incomplete:
+            print("⚠️  Languages with incomplete key coverage:")
+            for lang, count in incomplete:
+                print(f"   - {lang}: {count}/{len(english_keys)} keys")
+        else:
+            print("✅ All languages have key coverage equal to English")
+
+        return True
+    except Exception as e:
+        print(f"❌ Error during JS analysis: {e}")
+        return False
+
+
+def get_js_incomplete_languages(content):
+    """Return JS languages with key count lower than English reference."""
+    english_keys = extract_js_english_keys(content)
+    if not english_keys:
+        return []
+
+    incomplete = []
+    for lang in extract_js_i18n_languages(content):
+        if lang == 'en':
+            continue
+        lang_keys = extract_js_lang_keys(content, lang)
+        if len(lang_keys) < len(english_keys):
+            incomplete.append((lang, len(lang_keys), len(english_keys)))
+    return incomplete
+
+
+def get_js_suspicious_values(content):
+    """Detect suspicious translated values in non-EN languages."""
+    suspicious_patterns = [
+        r'error\s*500',
+        r"that.?s an error",
+        r'<html',
+        r'</html>',
+        r'google',
+        r'please try again later',
+    ]
+
+    susp = []
+    en_keys = extract_js_english_keys(content)
+    if not en_keys:
+        return susp
+
+    en_match = re.search(r'\ben\s*:\s*\{([\s\S]*?)\n\s*\}\s*,?', content)
+    if not en_match:
+        return susp
+    en_content = en_match.group(1)
+
+    for lang in extract_js_i18n_languages(content):
+        if lang == 'en':
+            continue
+
+        lang_match = re.search(rf'\b{lang}\s*:\s*\{{([\s\S]*?)\n\s*\}}\s*,?', content)
+        if not lang_match:
+            continue
+
+        lang_content = lang_match.group(1)
+        for key in en_keys:
+            vm = re.search(rf'\b{re.escape(key)}\s*:\s*"([\s\S]*?)"\s*(,|$)', lang_content)
+            if not vm:
+                continue
+            value = vm.group(1)
+            low = value.lower()
+
+            en_vm = re.search(rf'\b{re.escape(key)}\s*:\s*"([\s\S]*?)"\s*(,|$)', en_content)
+            en_value = en_vm.group(1) if en_vm else ''
+            untouched_en = (
+                value == en_value and
+                len(re.findall(r'[A-Za-z]{3,}', en_value)) >= 3 and
+                not re.search(r'https?://|`|\$\{|/api/|\.py|\.exe', en_value)
+            )
+
+            if any(re.search(p, low) for p in suspicious_patterns) or untouched_en:
+                susp.append((lang, key, value[:80]))
+    return susp
+
 def should_check_file(file_path):
     """Tentukan apakah file harus diperiksa DISPLAY_LANGUAGES-nya"""
     
@@ -634,8 +994,12 @@ def ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases):
             print("❌ Please enter 'y' for Yes or 'n' for No")
 
 def analyze_file(file_path):
-    """Detailed analysis of DISPLAY_LANGUAGES section - DENGAN FALLBACK STRATEGY"""
-    
+    """Detailed analysis of DISPLAY_LANGUAGES section / JS I18N - DENGAN FALLBACK STRATEGY"""
+
+    # JS support (non-destructive, read-only)
+    if file_path.endswith('.js'):
+        return analyze_js_i18n_file(file_path)
+
     # Skip file-file utility/template
     if not should_check_file(file_path):
         print(f"ℹ️  Skipping utility/template file: {file_path}")
@@ -931,14 +1295,19 @@ def analyze_file(file_path):
         traceback.print_exc()
         return False
 
-def list_files(quiet=False, search_subfolders=True):
-    """List files with DISPLAY_LANGUAGES - REKURSIF di semua subfolder"""
+def list_files(quiet=False, search_subfolders=True, target_path='.'):
+    """List files with DISPLAY_LANGUAGES/JS I18N - recursive from target path."""
     if not quiet:
         print("🔍 Searching for files with DISPLAY_LANGUAGES...")
         if search_subfolders:
             print("📁 Searching in current folder and all subfolders...")
         else:
             print("📁 Searching in current folder only...")
+
+    if not os.path.exists(target_path):
+        if not quiet:
+            print(f"❌ Target path not found: {target_path}")
+        return []
     
     found_files = []
     
@@ -981,30 +1350,39 @@ def list_files(quiet=False, search_subfolders=True):
                         search_in_directory(item_path)  # Rekursif
                     continue
                 
-                # Process Python files
-                if item.endswith('.py') and not should_skip_file(item):
+                # Process Python and JavaScript files
+                if (item.endswith('.py') or item.endswith('.js')) and not should_skip_file(item):
                     try:
                         with open(item_path, 'r', encoding='utf-8') as f:
                             content = f.read()
-                            
-                            # Deteksi DISPLAY_LANGUAGES section yang valid
-                            if (is_valid_display_languages_section(content) and 
-                                is_actual_display_section(content, item_path)):
+
+                            is_py_valid = (
+                                item.endswith('.py') and
+                                is_valid_display_languages_section(content) and
+                                is_actual_display_section(content, item_path)
+                            )
+                            is_js_valid = item.endswith('.js') and is_valid_js_i18n_section(content)
+
+                            if is_py_valid or is_js_valid:
                                 found_files.append(item_path)
                                 if not quiet:
-                                    # ✅ GUNAKAN FUNGSI DARI language_utils
-                                    langs = get_existing_languages_from_content(content)
                                     all_supported = get_all_supported_languages()
+                                    if item.endswith('.js'):
+                                        langs = extract_js_i18n_languages(content)
+                                    else:
+                                        langs = get_existing_languages_from_content(content)
+
                                     missing_langs = [lang for lang in all_supported if lang not in langs]
                                     lang_count = len(langs)
                                     missing_count = len(missing_langs)
                                     relative_path = os.path.relpath(item_path)
-                                    
+
                                     status = "✅" if missing_count == 0 else "⚠️"
-                                    print(f"{status} Found: {relative_path} ({lang_count}/{len(all_supported)} languages)")
+                                    file_type = "JS" if item.endswith('.js') else "PY"
+                                    print(f"{status} Found [{file_type}]: {relative_path} ({lang_count}/{len(all_supported)} languages)")
                                     if missing_count > 0:
                                         print(f"     Missing: {', '.join(missing_langs)}")
-                                    
+
                     except UnicodeDecodeError:
                         if not quiet:
                             print(f"⚠️  Encoding error in: {item_path}")
@@ -1019,46 +1397,56 @@ def list_files(quiet=False, search_subfolders=True):
                 print(f"⚠️  Error scanning {directory}: {e}")
     
     # Mulai pencarian
-    search_in_directory('.')
+    if os.path.isfile(target_path):
+        search_in_directory(os.path.dirname(target_path) or '.')
+        found_files = [fp for fp in found_files if os.path.abspath(fp) == os.path.abspath(target_path)]
+    else:
+        search_in_directory(target_path)
     
     if not quiet:
         if found_files:
             total_files = len(found_files)
             complete_files = 0
             
-            # Hitung file yang lengkap
+            # Hitung file yang lengkap (Python DISPLAY_LANGUAGES + JS I18N)
             for file_path in found_files:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                # ✅ GUNAKAN FUNGSI DARI language_utils
-                existing_langs = get_existing_languages_from_content(content)
                 all_supported = get_all_supported_languages()
-                
-                # ✅ PERBAIKAN: Cek apakah semua bahasa memiliki phrases
-                all_have_phrases = True
-                for lang in existing_langs:
-                    lang_pattern = rf'"{lang}":\s*\{{(.*?)\n    \}}'
-                    lang_match = re.search(lang_pattern, content, re.DOTALL)
-                    if lang_match:
-                        lang_content = lang_match.group(1)
-                        phrases1 = re.findall(r'"([^"]+)":\s*"[^"]*"', lang_content)
-                        phrases2 = re.findall(r'"([^"]+)":\s*"[^{]*\{[^}]*\}[^"]*"', lang_content)
-                        all_phrases = set(phrases1 + phrases2)
-                        if len(all_phrases) == 0:
-                            all_have_phrases = False
-                            break
+
+                if file_path.endswith('.js'):
+                    existing_langs = extract_js_i18n_languages(content)
+                    english_keys = extract_js_english_keys(content)
+                    all_have_phrases = len(english_keys) > 0 and len(get_js_incomplete_languages(content)) == 0
+                else:
+                    # ✅ GUNAKAN FUNGSI DARI language_utils
+                    existing_langs = get_existing_languages_from_content(content)
+
+                    # ✅ PERBAIKAN: Cek apakah semua bahasa memiliki phrases
+                    all_have_phrases = True
+                    for lang in existing_langs:
+                        lang_pattern = rf'"{lang}":\s*\{{(.*?)\n    \}}'
+                        lang_match = re.search(lang_pattern, content, re.DOTALL)
+                        if lang_match:
+                            lang_content = lang_match.group(1)
+                            phrases1 = re.findall(r'"([^"]+)":\s*"[^"]*"', lang_content)
+                            phrases2 = re.findall(r'"([^"]+)":\s*"[^{]*\{[^}]*\}[^"]*"', lang_content)
+                            all_phrases = set(phrases1 + phrases2)
+                            if len(all_phrases) == 0:
+                                all_have_phrases = False
+                                break
                 
                 if len(existing_langs) == len(all_supported) and all_have_phrases:
                     complete_files += 1
             
-            print(f"\n📊 Summary: Found {total_files} files with DISPLAY_LANGUAGES")
+            print(f"\n📊 Summary: Found {total_files} files with DISPLAY_LANGUAGES/JS I18N")
             print(f"🎯 Complete: {complete_files}/{total_files} files have all {len(all_supported)} languages with phrases")
             if search_subfolders:
                 print("🌐 Search scope: Current folder + all subfolders")
             else:
                 print("📁 Search scope: Current folder only")
         else:
-            print("❌ No files with DISPLAY_LANGUAGES found")
+            print("❌ No files with DISPLAY_LANGUAGES/JS I18N found")
     
     return found_files
 
@@ -1068,13 +1456,13 @@ LANGUAGE_NAMES = {
     "pt": "Portugués", "id": "Indonesia", "kr": "한국어"
 }
 
-def auto_check_all():
-    """Automatically check all Python files with DISPLAY_LANGUAGES"""
+def auto_check_all(target_path='.'):
+    """Automatically check all Python/JS files with i18n language blocks"""
     print("🔍 Auto-checking all files...")
-    files = list_files(quiet=True, search_subfolders=True)
+    files = list_files(quiet=True, search_subfolders=True, target_path=target_path)
     
     if not files:
-        print("❌ No files with DISPLAY_LANGUAGES found")
+        print("❌ No files with DISPLAY_LANGUAGES/JS I18N found")
         return
     
     print(f"\n📊 Found {len(files)} files to analyze:")
@@ -1082,32 +1470,51 @@ def auto_check_all():
     complete_files = 0
     files_with_missing_langs = []
     files_with_empty_phrases = []
+    js_files_need_fix = []
     
     for file_path in files:
         print(f"\n{'='*50}")
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        existing_langs = get_existing_languages_from_content(content)
         all_supported = get_all_supported_languages()
+
+        if file_path.endswith('.js'):
+            existing_langs = extract_js_i18n_languages(content)
+            english_keys = extract_js_english_keys(content)
+            incomplete_js = get_js_incomplete_languages(content)
+            suspicious_js = get_js_suspicious_values(content)
+            languages_with_empty_phrases = [] if english_keys else ['en']
+        else:
+            existing_langs = get_existing_languages_from_content(content)
+            incomplete_js = []
+            suspicious_js = []
+
+            # Cek bahasa yang memiliki phrases kosong
+            languages_with_empty_phrases = []
+            for lang in existing_langs:
+                lang_pattern = rf'"{lang}":\s*\{{(.*?)\n    \}}'
+                lang_match = re.search(lang_pattern, content, re.DOTALL)
+                if lang_match:
+                    lang_content = lang_match.group(1)
+                    phrases1 = re.findall(r'"([^"]+)":\s*"[^"]*"', lang_content)
+                    phrases2 = re.findall(r'"([^"]+)":\s*"[^{]*\{[^}]*\}[^"]*"', lang_content)
+                    all_phrases = set(phrases1 + phrases2)
+                    if len(all_phrases) == 0:
+                        languages_with_empty_phrases.append(lang)
         
-        # Cek bahasa yang memiliki phrases kosong
-        languages_with_empty_phrases = []
-        for lang in existing_langs:
-            lang_pattern = rf'"{lang}":\s*\{{(.*?)\n    \}}'
-            lang_match = re.search(lang_pattern, content, re.DOTALL)
-            if lang_match:
-                lang_content = lang_match.group(1)
-                phrases1 = re.findall(r'"([^"]+)":\s*"[^"]*"', lang_content)
-                phrases2 = re.findall(r'"([^"]+)":\s*"[^{]*\{[^}]*\}[^"]*"', lang_content)
-                all_phrases = set(phrases1 + phrases2)
-                if len(all_phrases) == 0:
-                    languages_with_empty_phrases.append(lang)
-        
-        missing_langs = [lang for lang in all_supported if lang not in existing_langs]
-        
-        has_all_languages = len(existing_langs) == len(all_supported)
-        all_languages_have_phrases = len(languages_with_empty_phrases) == 0
+        if file_path.endswith('.js'):
+            js_supported = _js_supported_langs_for_content(content, existing_langs)
+            existing_canonical = {_js_canonical_lang(l) for l in existing_langs}
+            missing_langs = [lang for lang in js_supported if _js_canonical_lang(lang) not in existing_canonical]
+            has_all_languages = len(existing_canonical) == len({ _js_canonical_lang(l) for l in js_supported })
+        else:
+            missing_langs = [lang for lang in all_supported if lang not in existing_langs]
+            has_all_languages = len(existing_langs) == len(all_supported)
+        all_languages_have_phrases = (
+            len(languages_with_empty_phrases) == 0 and
+            len(incomplete_js) == 0 and
+            len(suspicious_js) == 0
+        )
         
         if has_all_languages and all_languages_have_phrases:
             complete_files += 1
@@ -1122,7 +1529,11 @@ def auto_check_all():
                 
                 print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE ({len(existing_langs)}/{len(all_supported)} languages)")
                 print(f"   Missing: {', '.join(missing_display)}")
-                files_with_missing_langs.append((file_path, missing_langs))
+                if not file_path.endswith('.js'):
+                    files_with_missing_langs.append((file_path, missing_langs))
+                else:
+                    if file_path not in js_files_need_fix:
+                        js_files_need_fix.append(file_path)
             
             if languages_with_empty_phrases:
                 # ✅ PERBAIKAN: Tampilkan dengan nama bahasa asli
@@ -1133,14 +1544,64 @@ def auto_check_all():
                 
                 print(f"⚠️  {os.path.basename(file_path)}: {len(languages_with_empty_phrases)} languages have empty phrases")
                 print(f"   Empty: {', '.join(empty_display)}")
-                files_with_empty_phrases.append((file_path, languages_with_empty_phrases))
+                if not file_path.endswith('.js'):
+                    files_with_empty_phrases.append((file_path, languages_with_empty_phrases))
+                else:
+                    if file_path not in js_files_need_fix:
+                        js_files_need_fix.append(file_path)
+
+            if incomplete_js:
+                print(f"⚠️  {os.path.basename(file_path)}: {len(incomplete_js)} languages have incomplete key coverage vs EN")
+                for lang_code, current_count, expected_count in incomplete_js:
+                    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                    print(f"   - {lang_code} ({lang_name}): {current_count}/{expected_count} keys")
+                if file_path not in js_files_need_fix:
+                    js_files_need_fix.append(file_path)
+
+            if suspicious_js:
+                print(f"⚠️  {os.path.basename(file_path)}: {len(suspicious_js)} suspicious translated values detected")
+                for lang_code, key, snippet in suspicious_js[:10]:
+                    lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
+                    print(f"   - {lang_code} ({lang_name}) key '{key}': {snippet}")
+                if len(suspicious_js) > 10:
+                    print(f"   ... and {len(suspicious_js)-10} more")
+                if file_path not in js_files_need_fix:
+                    js_files_need_fix.append(file_path)
             
             if not missing_langs and not languages_with_empty_phrases:
                 print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE ({len(existing_langs)}/{len(all_supported)} languages)")
     
     print(f"\n🎯 FINAL SUMMARY: {complete_files}/{len(files)} files have complete language sets with phrases")
     
-    ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases)
+    if files_with_missing_langs or files_with_empty_phrases:
+        ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases)
+    else:
+        print("ℹ️ Auto-fix suggestions are available for Python files only.")
+
+    if js_files_need_fix:
+        print(f"\n🛠️ JS files needing fixes: {len(js_files_need_fix)}")
+        for fp in js_files_need_fix:
+            print(f"   - {os.path.basename(fp)}")
+        try:
+            choice = input("👉 Run JS auto-fix now? (y/N): ").strip().lower()
+        except EOFError:
+            choice = 'n'
+        if choice in ['y', 'yes']:
+            try:
+                from .js_i18n_tools import run_js_autofix
+            except ImportError:
+                from js_i18n_tools import run_js_autofix
+
+            success = 0
+            for fp in js_files_need_fix:
+                print(f"\n🔧 Auto-fixing JS: {fp}")
+                try:
+                    if run_js_autofix(fp):
+                        success += 1
+                except KeyboardInterrupt:
+                    print("\n⚠️ JS auto-fix interrupted by user. Continuing without crash.")
+                    break
+            print(f"✅ JS auto-fix completed: {success}/{len(js_files_need_fix)} files")
 
 # ======================== CLI MODE ========================
 
