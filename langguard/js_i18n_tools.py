@@ -22,8 +22,27 @@ def is_suspicious_translation(text):
         r'<html',
         r'</html>',
         r'please try again later',
+        r'google',
     ]
     return any(re.search(p, low) for p in patterns)
+
+
+def _looks_like_untranslated_english(en_value, translated_value, lang):
+    """Heuristic for non-EN values that are very likely untouched EN text."""
+    if lang == 'en':
+        return False
+
+    en_text = str(en_value or '').strip()
+    tr_text = str(translated_value or '').strip()
+    if not en_text or not tr_text or en_text != tr_text:
+        return False
+
+    if re.search(r'https?://|`|\$\{|/api/|\.py|\.exe', en_text):
+        return False
+
+    words = re.findall(r'[A-Za-z]{3,}', en_text)
+    return len(words) >= 3
+
 
 def _find_matching_brace(text, open_idx):
     brace = 0
@@ -152,6 +171,7 @@ def parse_js_i18n(content):
         'languages': langs,
     }
 
+
 def _render_i18n(languages):
     order = get_all_supported_languages()
     langs = [l for l in order if l in languages]
@@ -171,7 +191,15 @@ def _render_i18n(languages):
 
 def _replace_i18n(content, parsed, languages):
     new_block = _render_i18n(languages)
-    return content[:parsed['i18n_start']] + new_block + content[parsed['i18n_close'] + 1:]
+
+    tail_start = parsed['i18n_close'] + 1
+    tail = content[tail_start:]
+    semis = re.match(r'^[ 	]*;+', tail)
+    if semis:
+        tail_start += semis.end()
+
+    return content[:parsed['i18n_start']] + new_block + content[tail_start:]
+
 
 def _set_lang_order(content, langs):
     arr = ', '.join([f'"{l}"' for l in langs])
@@ -185,6 +213,7 @@ def _set_current_lang(content, lang):
     if re.search(r'\b(let|const|var)\s+currentLang\s*=\s*["\'][a-z]{2}["\']\s*;', content):
         return re.sub(r'\b(let|const|var)\s+currentLang\s*=\s*["\'][a-z]{2}["\']\s*;', f'let currentLang = "{lang}";', content, count=1)
     return content + f'\n\nlet currentLang = "{lang}";\n'
+
 
 def run_js_generate_section(target_file):
     with open(target_file, 'r', encoding='utf-8') as f:
@@ -382,21 +411,26 @@ def run_js_translate(target_file):
     else:
         print('⚠️ Module deep_translator tidak tersedia. Fallback: gunakan teks EN.')
 
+    translators = {}
     for lang in list(languages.keys()):
         if lang == 'en':
             continue
         lang_map = languages[lang]
         for k, v in en.items():
-            needs_fill = (k not in lang_map or not str(lang_map[k]).strip())
-            has_bad_value = (k in lang_map and is_suspicious_translation(lang_map[k]))
+            current = lang_map.get(k, '')
+            needs_fill = (k not in lang_map or not str(current).strip())
+            has_bad_value = is_suspicious_translation(current)
+            has_untranslated_en = _looks_like_untranslated_english(v, current, lang)
 
-            # Also repair suspicious existing values, not only missing ones.
-            if needs_fill or has_bad_value:
+            # Repair missing, suspicious, and likely untouched EN values.
+            if needs_fill or has_bad_value or has_untranslated_en:
                 if use_machine_translation:
                     target_map = {'jp': 'ja', 'kr': 'ko', 'zh': 'zh-CN'}.get(lang, lang)
                     try:
-                        translated = GoogleTranslator(source='auto', target=target_map).translate(str(v))
-                        if is_suspicious_translation(translated):
+                        if target_map not in translators:
+                            translators[target_map] = GoogleTranslator(source='en', target=target_map)
+                        translated = translators[target_map].translate(str(v))
+                        if is_suspicious_translation(translated) or _looks_like_untranslated_english(v, translated, lang):
                             lang_map[k] = str(v)
                         else:
                             lang_map[k] = translated
@@ -414,8 +448,9 @@ def run_js_translate(target_file):
     content = _replace_i18n(content, parsed, languages)
     with open(target_file, 'w', encoding='utf-8') as f:
         f.write(content)
-    print('✅ JS translate completed (missing keys filled)')
+    print('✅ JS translate completed (missing/suspicious keys repaired)')
     return True
+
 
 def run_js_autofix(target_file):
     """Auto-fix for JS: repair -> add missing languages -> translate missing keys."""

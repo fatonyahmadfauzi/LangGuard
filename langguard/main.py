@@ -43,6 +43,13 @@ except ImportError:
         run_js_translate,
     )
 
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -85,6 +92,7 @@ def ask_file_path(label="target file"):
         print("❌ File path cannot be empty")
         return None
     return file_path
+
 
 def is_js_file(path):
     return str(path).lower().endswith('.js')
@@ -194,6 +202,9 @@ def run_interactive_menu():
 
         else:
             print("❌ Invalid option")
+
+        input("\nPress Enter to continue...")
+        print("\n" * 2)
 
         input("\nPress Enter to continue...")
         print("\n" * 2)
@@ -337,6 +348,7 @@ def main():
         print("    langguard translate my_script.py   # Auto-translate missing phrases")
         print("")
         print("💡 TIP: Use 'check' first to see current status before making changes.")
+
 
 if __name__ == "__main__":
     main()

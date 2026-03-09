@@ -312,6 +312,11 @@ def get_js_suspicious_values(content):
     if not en_keys:
         return susp
 
+    en_match = re.search(r'\ben\s*:\s*\{([\s\S]*?)\n\s*\}\s*,?', content)
+    if not en_match:
+        return susp
+    en_content = en_match.group(1)
+
     for lang in extract_js_i18n_languages(content):
         if lang == 'en':
             continue
@@ -327,7 +332,16 @@ def get_js_suspicious_values(content):
                 continue
             value = vm.group(1)
             low = value.lower()
-            if any(re.search(p, low) for p in suspicious_patterns):
+
+            en_vm = re.search(rf'\b{re.escape(key)}\s*:\s*"([\s\S]*?)"\s*(,|$)', en_content)
+            en_value = en_vm.group(1) if en_vm else ''
+            untouched_en = (
+                value == en_value and
+                len(re.findall(r'[A-Za-z]{3,}', en_value)) >= 3 and
+                not re.search(r'https?://|`|\$\{|/api/|\.py|\.exe', en_value)
+            )
+
+            if any(re.search(p, low) for p in suspicious_patterns) or untouched_en:
                 susp.append((lang, key, value[:80]))
     return susp
 
