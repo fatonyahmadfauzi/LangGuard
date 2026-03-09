@@ -43,6 +43,41 @@ except ImportError:
         run_js_translate,
     )
 
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def ask_target_path(default='.'):
+    target = input("Target folder/file path (empty=current folder): ").strip()
+    return target or default
+
+
+
+
+def wait_for_enter_once():
+    """Wait for a single Enter and clear buffered keystrokes to avoid repeated prompts."""
+    try:
+        if os.name == 'nt':
+            import msvcrt
+            while msvcrt.kbhit():
+                msvcrt.getch()
+        else:
+            import select
+            while select.select([sys.stdin], [], [], 0)[0]:
+                sys.stdin.readline()
+    except Exception:
+        pass
+
+    input("\nPress Enter to continue...")
+
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -157,6 +192,7 @@ def ask_file_path(label="target file"):
     if not file_path:
         return "."
     return file_path
+
 
 def is_js_file(path):
     return str(path).lower().endswith('.js')
@@ -300,33 +336,7 @@ def run_interactive_menu():
             print("❌ Invalid option")
 
         if action_executed:
-            input("\nPress Enter to continue...")
-
-
-def is_js_file(path):
-    return str(path).lower().endswith('.js')
-
-
-def run_interactive_menu():
-    while True:
-        pause_after_action = True
-        clear_screen()
-        show_banner()
-        print(f"{GREEN}[1] Check file / auto-check")
-        print("[2] Clipboard template")
-        print("[3] Generate DISPLAY_LANGUAGES section")
-        print("[4] Add missing languages")
-        print("[5] Remove languages")
-        print("[6] Set global language")
-        print("[7] Repair functions/section")
-        print("[8] Auto-translate missing phrases")
-        print("[9] Version")
-        print(f"{GRAY}[0] Exit{RESET}")
-
-        choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
-
-        if not choice:
-            continue
+            wait_for_enter_once()
 
         if choice == "0":
             print("👋 Bye!")
