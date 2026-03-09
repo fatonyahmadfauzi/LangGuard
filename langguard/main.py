@@ -50,6 +50,47 @@ YELLOW = "\033[93m"
 GRAY = "\033[90m"
 RESET = "\033[0m"
 
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def ask_target_path(default='.'):
+    target = input("Target folder/file path (empty=current folder): ").strip()
+    return target or default
+
+
+
+
+def flush_console_input():
+    """Best-effort flush for queued keyboard input in Windows consoles."""
+    if os.name != "nt":
+        return
+    try:
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getwch()
+    except Exception:
+        pass
+
+
+def post_action_navigation():
+    """Navigation prompt after an action without requiring Enter-to-continue."""
+    while True:
+        nav = input("\n[1] Back to main menu\n[0] Exit\n[+] Select option: ").strip()
+        if nav in ("1", ""):
+            return True
+        if nav == "0":
+            print("👋 Bye!")
+            return False
+        print("❌ Invalid option")
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
 # Backward-compat fallback for older interactive flows that still reference this name
 pause_after_action = True  # backward-compat fallback for stale runtime code paths
 
@@ -506,6 +547,11 @@ def run_interactive_menu():
 
         else:
             print("❌ Invalid option")
+            action_executed = True
+
+        if action_executed:
+            if not post_action_navigation():
+                return
 
         if action_executed:
             if not post_action_navigation():
