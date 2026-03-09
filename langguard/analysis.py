@@ -359,6 +359,7 @@ def analyze_js_i18n_file(file_path):
         print(f"❌ Error during JS analysis: {e}")
         return False
 
+
 def get_js_incomplete_languages(content):
     """Return JS languages with key count lower than English reference."""
     english_keys = extract_js_english_keys(content)
@@ -373,6 +374,7 @@ def get_js_incomplete_languages(content):
         if len(lang_keys) < len(english_keys):
             incomplete.append((lang, len(lang_keys), len(english_keys)))
     return incomplete
+
 
 def get_js_suspicious_values(content):
     """Detect suspicious translated values in non-EN languages."""
