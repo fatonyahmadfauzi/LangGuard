@@ -5,9 +5,11 @@ langguard/analysis.py
 langguard/clipboard.py
 langguard/fallback_strategy.py
 langguard/insert_section.py
+langguard/js_i18n_tools.py
 langguard/language_selection.py
 langguard/language_utils.py
 langguard/main.py
+langguard/messages.py
 langguard/remove_languages.py
 langguard/repair_functions.py
 langguard/translate.py

@@ -1,0 +1,1629 @@
+#!/usr/bin/env python3
+"""
+MultiDoc Translator - Automated multi-language documentation translator
+Support for README.md and CHANGELOG.md translation with protection features
+"""
+
+import os
+import re
+import json
+import time
+import argparse
+import shutil
+import sys
+from deep_translator import GoogleTranslator
+from tqdm import tqdm
+
+# Global variable for display language
+DISPLAY_LANG = "en"
+
+def set_display_language(lang_code):
+    """Set display language for notifications"""
+    global DISPLAY_LANG
+    if lang_code in DISPLAY_LANGUAGES:
+        DISPLAY_LANG = lang_code
+        print(f"✅ Display language set to: {lang_code}")
+    else:
+        print(f"❌ Language '{lang_code}' not supported. Using English.")
+
+def t(key, **kwargs):
+    """Translation function for notifications"""
+    global DISPLAY_LANG
+    try:
+        if DISPLAY_LANG in DISPLAY_LANGUAGES and key in DISPLAY_LANGUAGES[DISPLAY_LANG]:
+            return DISPLAY_LANGUAGES[DISPLAY_LANG][key].format(**kwargs)
+        elif key in DISPLAY_LANGUAGES["en"]:
+            return DISPLAY_LANGUAGES["en"][key].format(**kwargs)
+        else:
+            return key
+    except Exception:
+        return key
+
+def get_display_language():
+    """Get current display language"""
+    return DISPLAY_LANG
+
+def get_available_languages():
+    """Get list of available languages"""
+    return list(DISPLAY_LANGUAGES.keys())
+
+SOURCE_FILE = "README.md"
+CHANGELOG_FILE = "CHANGELOG.md"
+PACKAGE_JSON = "package.json"
+OUTPUT_DIR = "docs/lang"
+PROTECTED_FILE = "protected_phrases.json"
+PROTECT_STATUS_FILE = ".protect_status"
+
+# ---------------------- LANGUAGE SETTINGS ----------------------
+LANGUAGES = {
+    "pl": ("Polski", "pl", "🌐 Dostępne w innych językach:"),
+    "zh": ("中文", "zh-CN", "🌐 提供其他语言版本："),
+    "jp": ("日本語", "ja", "🌐 他の言語でも利用可能:"),
+    "de": ("Deutsch", "de", "🌐 In anderen Sprachen verfügbar:"),
+    "fr": ("Français", "fr", "🌐 Disponible dans d'autres langues :"),
+    "es": ("Español", "es", "🌐 Disponible en otros idiomas:"),
+    "ru": ("Русский", "ru", "🌐 Доступно na innych językach:"),
+    "pt": ("Português", "pt", "🌐 Disponível em outros idiomas:"),
+    "id": ("Bahasa Indonesia", "id", "🌐 Tersedia dalam bahasa lain:"),
+    "kr": ("한국어", "ko", "🌐 다른 언어로도 사용 가능:"),
+}
+
+DEFAULT_PROTECTED = {
+    "protected_phrases": [
+        r"MIT\s+License(?:\s*©)?(?:\s*\d{4})?",
+        r"https?:\/\/\S+",
+        r"\(LICENSE\)",
+        r"\(\.\./\.\./LICENSE\)",
+        r"\*\*1\.85\.0\*\*",
+        r"\*\*Windows\*\*",
+        r"\*\*macOS\*\*", 
+        r"\*\*Linux\*\*",
+        r"\*\*Windows,\s*macOS\s*et\s*Linux\*\*",
+        r"Visual Studio Code",
+        r"VS Code",
+        r"Google Translate",
+        r"API",
+        r"GitHub",
+        r"README\.md",
+        r"CHANGELOG\.md",
+        r"Markdown"
+    ]
+}
+
+# ---------------------- GITHUB URL DETECTION ----------------------
+def get_github_repo_url():
+    """Detect GitHub repository URL from various sources"""
+    # Try from package.json first
+    try:
+        if os.path.exists(PACKAGE_JSON):
+            with open(PACKAGE_JSON, "r", encoding="utf-8") as f:
+                package_data = json.load(f)
+            
+            if package_data.get("repository"):
+                repo_url = ""
+                if isinstance(package_data["repository"], str):
+                    repo_url = package_data["repository"]
+                elif isinstance(package_data["repository"], dict) and package_data["repository"].get("url"):
+                    repo_url = package_data["repository"]["url"]
+                
+                # Normalize URL
+                if repo_url:
+                    # Handle git+https:// format
+                    repo_url = repo_url.replace("git+", "")
+                    # Handle git@github.com: format
+                    repo_url = repo_url.replace("git@github.com:", "https://github.com/")
+                    # Handle .git suffix
+                    repo_url = repo_url.replace(".git", "")
+                    # Ensure it's a GitHub URL
+                    if "github.com" in repo_url:
+                        return repo_url
+    except Exception as e:
+        print(t("reading_package_error", error=e))
+    
+    # Try from .git/config
+    try:
+        git_config_path = os.path.join(".git", "config")
+        if os.path.exists(git_config_path):
+            with open(git_config_path, "r", encoding="utf-8") as f:
+                git_config = f.read()
+            
+            url_match = re.search(r'url\s*=\s*(.+)', git_config)
+            if url_match and url_match.group(1):
+                repo_url = url_match.group(1).strip()
+                # Normalize URL
+                repo_url = repo_url.replace("git@github.com:", "https://github.com/")
+                repo_url = repo_url.replace(".git", "")
+                if "github.com" in repo_url:
+                    return repo_url
+    except Exception as e:
+        print(t("reading_git_error", error=e))
+    
+    # Fallback: search in README.md
+    try:
+        if os.path.exists(SOURCE_FILE):
+            with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+                readme_content = f.read()
+            
+            github_url_match = re.search(r'https://github\.com/[a-zA-Z0-9-]+/[a-zA-Z0-9-_.]+', readme_content)
+            if github_url_match:
+                return github_url_match.group(0)
+    except Exception as e:
+        print(t("reading_github_error", error=e))
+    
+    return None
+
+def get_github_releases_url():
+    """Generate GitHub Releases URL from repository URL"""
+    repo_url = get_github_repo_url()
+    if repo_url:
+        return f"{repo_url}/releases"
+    
+    # Fallback default (for this extension itself)
+    return "https://github.com/fatonyahmadfauzi/Auto-Translate-Readmes/releases"
+
+def detect_github_url():
+    """Function to detect and display GitHub URL"""
+    repo_url = get_github_repo_url()
+    releases_url = get_github_releases_url()
+    
+    if repo_url:
+        print(t("github_url_detected"))
+        print(t("repo_url", url=repo_url))
+        print(t("releases_url", url=releases_url))
+        print("\n" + t("sources_checked"))
+        print("• package.json (repository field)")
+        print("• .git/config")
+        print("• README.md (GitHub URL patterns)")
+        return True
+    else:
+        print(t("no_github_url"))
+        print("\nPlease check:")
+        print("• package.json has 'repository' field")
+        print("• .git/config has remote URL") 
+        print("• Or add GitHub URL manually to README")
+        return False
+
+# ---------------------- PROTECTION UTILITIES ----------------------
+def load_protected_phrases():
+    if not os.path.exists(PROTECTED_FILE):
+        save_protected_phrases(DEFAULT_PROTECTED)
+    with open(PROTECTED_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_protected_phrases(data):
+    with open(PROTECTED_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def is_protect_enabled():
+    return os.path.exists(PROTECT_STATUS_FILE)
+
+def set_protect_status(enabled):
+    if enabled:
+        open(PROTECT_STATUS_FILE, "w").close()
+    else:
+        if os.path.exists(PROTECT_STATUS_FILE):
+            os.remove(PROTECT_STATUS_FILE)
+
+# ---------------------- CHANGELOG DETECTION ----------------------
+def has_changelog_file():
+    """Check if CHANGELOG.md file exists in root"""
+    return os.path.exists(CHANGELOG_FILE)
+
+def has_changelog_section_in_readme():
+    """Check if README.md has Changelog section"""
+    
+    with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+        content = f.read()
+    
+    # Check patterns for Changelog section
+    patterns = [
+        r"##\s+🧾\s+Changelog",
+        r"##\s+Changelog",
+        r"#+\s+Changelog",
+        r"##\s+📝\s+Changelog",  # Tambahkan pattern alternatif
+        r"##\s+.*[Cc]hangelog"   # Pattern lebih fleksibel
+    ]
+    
+    for pattern in patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            return True
+    
+    return False
+
+def fix_existing_changelog_spacing():
+    """Fix spacing and separators for existing Changelog section"""
+    if not has_changelog_section_in_readme():
+        return False
+    
+    try:
+        with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        changes_made = False
+        
+        # 1. Fix pattern: --- directly followed by ## 🧾 Changelog
+        # Becomes: --- + 1 empty line + ## 🧾 Changelog
+        old_pattern = r'---\s*\n\s*## 🧾 Changelog'
+        new_pattern = '---\n\n## 🧾 Changelog'
+        
+        if re.search(old_pattern, content):
+            content = re.sub(old_pattern, new_pattern, content)
+            changes_made = True
+        
+        # 2. Check if there's separator between Changelog and License
+        if '## 🧾 Changelog' in content and '## 🧾 License' in content:
+            # Check if there's --- between Changelog and License
+            between_sections = re.search(r'## 🧾 Changelog.*?(## 🧾 License)', content, re.DOTALL)
+            if between_sections:
+                section_content = between_sections.group(0)
+                if '---' not in section_content:
+                    # Add --- before License
+                    content = re.sub(
+                        r'(## 🧾 Changelog.*?)(## 🧾 License)',
+                        r'\1\n\n---\n\n\2',
+                        content,
+                        flags=re.DOTALL
+                    )
+                    changes_made = True
+        
+        if changes_made:
+            with open(SOURCE_FILE, "w", encoding="utf-8") as f:
+                f.write(content)
+            
+            print(t("changelog_spacing_fixed"))
+            return True
+        
+        return False
+        
+    except Exception as e:
+        print(t("failed_update_main", error=e))
+        return False
+
+def add_changelog_section_to_readme():
+    """Add Changelog section to README.md if not exists with proper spacing and separators"""
+    if not has_changelog_file():
+        print(t("no_changelog_file_root"))
+        return False
+    
+    if has_changelog_section_in_readme():
+        print(t("changelog_section_exists"))
+        # Fix spacing if already exists
+        fix_existing_changelog_spacing()
+        return True
+    
+    try:
+        with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        # Get dynamic GitHub Releases URL
+        github_releases_url = get_github_releases_url()
+        
+        # Find position before License section to add Changelog
+        license_pattern = r'##\s+🧾\s+License'
+        license_match = re.search(license_pattern, content, re.IGNORECASE)
+        
+        # Changelog section with correct format including separators
+        changelog_section = f"""
+
+---
+
+## 🧾 Changelog
+
+See all notable changes for each version in the [CHANGELOG.md](CHANGELOG.md) file.
+
+> 📦 You can also view release notes directly on the [GitHub Releases page]({github_releases_url}).
+
+"""
+        
+        if license_match:
+            # Insert before License section
+            position = license_match.start()
+            
+            # Check if there's already --- before License
+            content_before_license = content[:position].rstrip()
+            if content_before_license.endswith('---'):
+                # If there's already ---, we only need to add Changelog section
+                # Remove existing --- and replace with complete section
+                last_dash_pos = content_before_license.rfind('---')
+                new_content = content[:last_dash_pos].rstrip() + changelog_section + content[position:]
+            else:
+                # If no ---, add complete section with ---
+                new_content = content[:position] + changelog_section + content[position:]
+        else:
+            # Add at end of file before License if exists
+            if "## 🧾 License" in content:
+                license_pos = content.find("## 🧾 License")
+                content_before_license = content[:license_pos].rstrip()
+                
+                if content_before_license.endswith('---'):
+                    # If there's already ---, replace with complete section
+                    last_dash_pos = content_before_license.rfind('---')
+                    new_content = content[:last_dash_pos].rstrip() + changelog_section + content[license_pos:]
+                else:
+                    # If no ---, add complete section
+                    new_content = content[:license_pos] + changelog_section + content[license_pos:]
+            else:
+                # Add at end of file with separator
+                if content.strip().endswith('---'):
+                    new_content = content.rstrip() + f'\n\n## 🧾 Changelog\n\nSee all notable changes for each version in the [CHANGELOG.md](CHANGELOG.md) file.\n\n> 📦 You can also view release notes directly on the [GitHub Releases page]({github_releases_url}).'
+                else:
+                    new_content = content.strip() + f'\n\n---\n\n## 🧾 Changelog\n\nSee all notable changes for each version in the [CHANGELOG.md](CHANGELOG.md) file.\n\n> 📦 You can also view release notes directly on the [GitHub Releases page]({github_releases_url}).'
+        
+        # Final cleanup: ensure correct format
+        # Pattern: --- followed by 1 empty line, then ## 🧾 Changelog
+        new_content = re.sub(r'---\s*\n\s*## 🧾 Changelog', '---\n\n## 🧾 Changelog', new_content)
+        
+        # Also ensure there's --- before License
+        if '## 🧾 Changelog' in new_content and '## 🧾 License' in new_content:
+            # Check if there's --- between Changelog and License
+            between_sections = re.search(r'## 🧾 Changelog.*?(## 🧾 License)', new_content, re.DOTALL)
+            if between_sections:
+                section_content = between_sections.group(0)
+                if '---' not in section_content:
+                    # Add --- before License
+                    new_content = re.sub(
+                        r'(## 🧾 Changelog.*?)(## 🧾 License)',
+                        r'\1\n\n---\n\n\2',
+                        new_content,
+                        flags=re.DOTALL
+                    )
+        
+        # Also fix if there are multiple empty lines
+        new_content = re.sub(r'\n\n\n+', '\n\n', new_content)
+        
+        with open(SOURCE_FILE, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        
+        print(t("changelog_section_added"))
+        print(f"🔗 GitHub Releases URL: {github_releases_url}")
+        return True
+        
+    except Exception as e:
+        print(t("changelog_setup_failed"))
+        return False
+
+# ---------------------- TRANSLATION FUNCTIONS ----------------------
+def translate_text(text, dest):
+    if not text.strip():
+        return text
+    try:
+        # Tambahkan timeout dan retry mechanism
+        import time
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return GoogleTranslator(source="auto", target=dest).translate(text)
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2)  # Wait before retry
+                    continue
+                raise e
+    except Exception as e:
+        print(t("translation_failed", error=e))
+        # Return original text instead of failing completely
+        return text
+
+def get_existing_translated_languages():
+    """Get list of languages that already have README files"""
+    existing_langs = []
+    if not os.path.exists(OUTPUT_DIR):
+        return existing_langs
+        
+    for code in LANGUAGES:
+        # Special filename format for jp, zh, kr
+        if code == "jp":
+            readme_path = os.path.join(OUTPUT_DIR, "README-JP.md")
+        elif code == "zh":
+            readme_path = os.path.join(OUTPUT_DIR, "README-ZH.md")
+        elif code == "kr":
+            readme_path = os.path.join(OUTPUT_DIR, "README-KR.md")
+        else:
+            readme_path = os.path.join(OUTPUT_DIR, f"README-{code.upper()}.md")
+            
+        if os.path.exists(readme_path):
+            existing_langs.append(code)
+    return existing_langs
+
+def update_language_switcher(new_languages=None, removed_languages=None):
+    """Update language switcher in main README and all translated READMEs"""
+    
+    # Get all existing languages
+    existing_langs = get_existing_translated_languages()
+    
+    # If there are new languages, add to existing list
+    if new_languages:
+        for lang in new_languages:
+            if lang not in existing_langs:
+                existing_langs.append(lang)
+    
+    # If there are removed languages, remove from existing list
+    if removed_languages:
+        for lang in removed_languages:
+            if lang in existing_langs:
+                existing_langs.remove(lang)
+    
+    # Update main README (English)
+    try:
+        with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        # Create link list for main README with desired order
+        lang_links = []
+        # Order: pl, zh, jp, de, fr, es, ru, pt, id, kr
+        ordered_langs = ["pl", "zh", "jp", "de", "fr", "es", "ru", "pt", "id", "kr"]
+        ordered_existing = [lang for lang in ordered_langs if lang in existing_langs]
+        
+        for code in ordered_existing:
+            if code in LANGUAGES:
+                name = LANGUAGES[code][0]
+                # Special filename format for links
+                if code == "jp":
+                    lang_links.append(f"[{name}](docs/lang/README-JP.md)")
+                elif code == "zh":
+                    lang_links.append(f"[{name}](docs/lang/README-ZH.md)")
+                elif code == "kr":
+                    lang_links.append(f"[{name}](docs/lang/README-KR.md)")
+                else:
+                    lang_links.append(f"[{name}](docs/lang/README-{code.upper()}.md)")
+        
+        if lang_links:
+            switcher = f"> 🌐 Available in other languages: {' | '.join(lang_links)}\n"
+            
+            # Find and replace existing language switcher
+            if "> 🌐 Available in other languages:" in content:
+                # Replace only the language switcher part
+                content = re.sub(
+                    r'> 🌐 Available in other languages:.*', 
+                    f'> 🌐 Available in other languages: {" | ".join(lang_links)}', 
+                    content
+                )
+            else:
+                # Add new one before ---
+                match = re.search(r"\n-{3,}\n", content)
+                if match:
+                    position = match.start()
+                    content = content[:position] + "\n" + switcher + content[position:]
+                else:
+                    content = content.strip() + "\n" + switcher
+        else:
+            # Remove language switcher if no other languages (including excess empty lines)
+            content = re.sub(r'> 🌐 Available in other languages:.*\n', '', content)
+            # Remove remaining excess empty lines
+            content = re.sub(r'\n\n\n', '\n\n', content)
+            content = re.sub(r'\n\n\n', '\n\n', content)
+        
+        with open(SOURCE_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(t("language_switcher_updated", filename="main README"))
+        if ordered_existing:
+            print(f"   Languages: {', '.join(ordered_existing)}")
+        else:
+            print(f"   {t('no_translation_files')}")
+    
+    except Exception as e:
+        print(t("failed_update_switcher", filename="main README", error=e))
+    
+    # Update all translated READMEs
+    for lang_code in existing_langs:
+        if lang_code in LANGUAGES:
+            lang_name, _, intro_text = LANGUAGES[lang_code]
+            # Special filename format for jp, zh, kr
+            if lang_code == "jp":
+                readme_path = os.path.join(OUTPUT_DIR, "README-JP.md")
+            elif lang_code == "zh":
+                readme_path = os.path.join(OUTPUT_DIR, "README-ZH.md")
+            elif lang_code == "kr":
+                readme_path = os.path.join(OUTPUT_DIR, "README-KR.md")
+            else:
+                readme_path = os.path.join(OUTPUT_DIR, f"README-{lang_code.upper()}.md")
+            
+            if os.path.exists(readme_path):
+                try:
+                    with open(readme_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    
+                    # Create link list for this language (all languages except itself)
+                    links = ["[English](../../README.md)"]
+                    # Order: pl, zh, jp, de, fr, es, ru, pt, id, kr
+                    ordered_langs = ["pl", "zh", "jp", "de", "fr", "es", "ru", "pt", "id", "kr"]
+                    ordered_others = [code for code in ordered_langs if code in existing_langs and code != lang_code]
+                    
+                    for code in ordered_others:
+                        name = LANGUAGES[code][0]
+                        # Special filename format for links
+                        if code == "jp":
+                            links.append(f"[{name}](README-JP.md)")
+                        elif code == "zh":
+                            links.append(f"[{name}](README-ZH.md)")
+                        elif code == "kr":
+                            links.append(f"[{name}](README-KR.md)")
+                        else:
+                            links.append(f"[{name}](README-{code.upper()}.md)")
+                    
+                    links_text = " | ".join(links)
+                    new_switcher_line = f"> {intro_text} {links_text}"
+                    
+                    # Find and replace existing language switcher
+                    escaped_intro = re.escape(intro_text)
+                    if f"> {intro_text}" in content:
+                        # Replace only the language switcher part
+                        content = re.sub(
+                            fr'> {escaped_intro}.*', 
+                            new_switcher_line, 
+                            content
+                        )
+                    else:
+                        # Add new one before ---
+                        match = re.search(r"\n-{3,}\n", content)
+                        if match:
+                            position = match.start()
+                            content = content[:position] + "\n" + new_switcher_line + "\n" + content[position:]
+                    
+                    with open(readme_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    print(t("language_switcher_updated", filename=f"README-{lang_code.upper()}"))
+                
+                except Exception as e:
+                    print(t("failed_update_switcher", filename=f"README-{lang_code.upper()}", error=e))
+
+def remove_language_files(lang_codes):
+    """Remove README files for specific languages and update language switcher"""
+    removed_langs = []
+    
+    for lang_code in lang_codes:
+        if lang_code in LANGUAGES:
+            # Special filename format for jp, zh, kr
+            if lang_code == "jp":
+                readme_path = os.path.join(OUTPUT_DIR, "README-JP.md")
+                changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-JP.md")
+            elif lang_code == "zh":
+                readme_path = os.path.join(OUTPUT_DIR, "README-ZH.md")
+                changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-ZH.md")
+            elif lang_code == "kr":
+                readme_path = os.path.join(OUTPUT_DIR, "README-KR.md")
+                changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-KR.md")
+            else:
+                readme_path = os.path.join(OUTPUT_DIR, f"README-{lang_code.upper()}.md")
+                changelog_path = os.path.join(OUTPUT_DIR, f"CHANGELOG-{lang_code.upper()}.md")
+            
+            # Remove README file
+            if os.path.exists(readme_path):
+                try:
+                    os.remove(readme_path)
+                    removed_langs.append(lang_code)
+                    print(t("file_deleted", filename=os.path.basename(readme_path)))
+                except Exception as e:
+                    print(t("failed_delete_file", filename=os.path.basename(readme_path), error=e))
+            else:
+                print(t("file_not_found", filename=os.path.basename(readme_path)))
+            
+            # Remove CHANGELOG file if exists
+            if os.path.exists(changelog_path):
+                try:
+                    os.remove(changelog_path)
+                    print(t("file_deleted", filename=os.path.basename(changelog_path)))
+                except Exception as e:
+                    print(t("failed_delete_file", filename=os.path.basename(changelog_path), error=e))
+        else:
+            print(t("language_not_recognized", code=lang_code))
+    
+    # Update language switcher after removing files
+    if removed_langs:
+        update_language_switcher(removed_languages=removed_langs)
+        
+        # Remove docs/lang folder if empty, then docs if also empty
+        if not get_existing_translated_languages():
+            try:
+                if os.path.exists(OUTPUT_DIR) and not os.listdir(OUTPUT_DIR):
+                    shutil.rmtree(OUTPUT_DIR)
+                    print(t("folder_deleted", folder=OUTPUT_DIR))
+                    
+                    # Check if docs folder is also empty, if yes remove
+                    docs_dir = os.path.dirname(OUTPUT_DIR)
+                    if os.path.exists(docs_dir) and not os.listdir(docs_dir):
+                        shutil.rmtree(docs_dir)
+                        print(t("folder_deleted", folder=docs_dir))
+            except Exception as e:
+                print(t("failed_delete_folder", error=e))
+    
+    return removed_langs
+
+def remove_all_language_files():
+    """Remove all translated README files and docs/lang folder and docs if empty"""
+    existing_langs = get_existing_translated_languages()
+    
+    if not existing_langs:
+        print(t("no_translation_files"))
+        return
+    
+    # Remove all README and CHANGELOG files
+    for lang_code in existing_langs:
+        # Special filename format for jp, zh, kr
+        if lang_code == "jp":
+            readme_path = os.path.join(OUTPUT_DIR, "README-JP.md")
+            changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-JP.md")
+        elif lang_code == "zh":
+            readme_path = os.path.join(OUTPUT_DIR, "README-ZH.md")
+            changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-ZH.md")
+        elif lang_code == "kr":
+            readme_path = os.path.join(OUTPUT_DIR, "README-KR.md")
+            changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-KR.md")
+        else:
+            readme_path = os.path.join(OUTPUT_DIR, f"README-{lang_code.upper()}.md")
+            changelog_path = os.path.join(OUTPUT_DIR, f"CHANGELOG-{lang_code.upper()}.md")
+        
+        try:
+            if os.path.exists(readme_path):
+                os.remove(readme_path)
+                print(t("file_deleted", filename=os.path.basename(readme_path)))
+            
+            if os.path.exists(changelog_path):
+                os.remove(changelog_path)
+                print(t("file_deleted", filename=os.path.basename(changelog_path)))
+        except Exception as e:
+            print(t("failed_delete_file", filename=f"for {lang_code}", error=e))
+    
+    # Remove docs/lang folder if empty, then docs if also empty
+    try:
+        if os.path.exists(OUTPUT_DIR):
+            if not os.listdir(OUTPUT_DIR):
+                shutil.rmtree(OUTPUT_DIR)
+                print(t("folder_deleted", folder=OUTPUT_DIR))
+                
+                # Check if docs folder is also empty, if yes remove
+                docs_dir = os.path.dirname(OUTPUT_DIR)
+                if os.path.exists(docs_dir) and not os.listdir(docs_dir):
+                    shutil.rmtree(docs_dir)
+                    print(t("folder_deleted", folder=docs_dir))
+            else:
+                print(t("folder_not_empty", folder=OUTPUT_DIR))
+    except Exception as e:
+        print(t("failed_delete_folder", error=e))
+    
+    # Update main README to remove language switcher and clean up empty lines
+    try:
+        with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        # Remove language switcher
+        content = re.sub(r'> 🌐 Available in other languages:.*\n', '', content)
+        
+        # Clean up excess empty lines
+        content = re.sub(r'\n\n\n', '\n\n', content)
+        content = re.sub(r'\n\n\n', '\n\n', content)
+        
+        with open(SOURCE_FILE, "w", encoding="utf-8") as f:
+            f.write(content)
+        
+        print(t("language_switcher_updated", filename="main README"))
+    
+    except Exception as e:
+        print(t("failed_update_main", error=e))
+
+def protect_specific_phrases(text, lang_code):
+    """Special protection for important phrases after translation"""
+    
+    # Protection for version
+    text = re.sub(r'(\*\*)?1\.85\.0(\*\*)?', '**1.85.0**', text)
+    
+    # Protection for operating systems
+    text = re.sub(r'(\*\*)?Windows(\*\*)?', '**Windows**', text, flags=re.IGNORECASE)
+    text = re.sub(r'(\*\*)?macOS(\*\*)?', '**macOS**', text, flags=re.IGNORECASE)
+    text = re.sub(r'(\*\*)?Linux(\*\*)?', '**Linux**', text, flags=re.IGNORECASE)
+    
+    # Special protection for OS list format
+    text = re.sub(r'\*\*Windows\*\*,?\s*\*\*macOS\*\*,?\s*(et|and|und|y|и)\s*\*\*Linux\*\*', '**Windows**, **macOS** et **Linux**', text, flags=re.IGNORECASE)
+    text = re.sub(r'\*\*Windows\*\*,?\s*\*\*macOS\*\*,?\s*\*\*Linux\*\*', '**Windows**, **macOS** et **Linux**', text, flags=re.IGNORECASE)
+    
+    return text
+
+# ---------------------- CHANGELOG TRANSLATION ----------------------
+def translate_changelog(lang_code, lang_info, protected):
+    """Translate CHANGELOG.md file to target language"""
+    if not has_changelog_file():
+        return False
+    
+    lang_name, translate_code, _ = lang_info
+    # Special filename format for jp, zh, kr
+    if lang_code == "jp":
+        changelog_dest_path = os.path.join(OUTPUT_DIR, "CHANGELOG-JP.md")
+    elif lang_code == "zh":
+        changelog_dest_path = os.path.join(OUTPUT_DIR, "CHANGELOG-ZH.md")
+    elif lang_code == "kr":
+        changelog_dest_path = os.path.join(OUTPUT_DIR, "CHANGELOG-KR.md")
+    else:
+        changelog_dest_path = os.path.join(OUTPUT_DIR, f"CHANGELOG-{lang_code.upper()}.md")
+    
+    print(t("translating_changelog", lang_name=lang_name, lang_code=lang_code.upper()))
+    
+    try:
+        with open(CHANGELOG_FILE, "r", encoding="utf-8") as f:
+            changelog_content = f.read()
+        
+        # Separate CHANGELOG header and body
+        parts = re.split(r'\n-{3,}\n', changelog_content, 1)
+        changelog_header = parts[0] if len(parts) > 0 else ""
+        changelog_body = parts[1] if len(parts) > 1 else ""
+        
+        # Translate CHANGELOG title
+        translated_title = translate_text("Changelog", translate_code)
+        
+        # Create translated header
+        if "# Changelog" in changelog_header:
+            translated_header = changelog_header.replace("# Changelog", f"# {translated_title}")
+        else:
+            translated_header = f"# {translated_title}\n\n{changelog_header}"
+        
+        # Process CHANGELOG body translation
+        body_lines = changelog_body.split("\n")
+        translated_lines = []
+        in_code_block = False
+        
+        for line in body_lines:
+            # Detect code blocks
+            if line.strip().startswith("```"):
+                in_code_block = not in_code_block
+                translated_lines.append(line)
+                continue
+            
+            # If in code block, don't translate
+            if in_code_block:
+                translated_lines.append(line)
+                continue
+            
+            # Detect version (format: ## [1.0.0] - 2024-01-01)
+            version_match = re.match(r'^(##\s+\[[\d\.]+\]\s*-\s*\d{4}-\d{2}-\d{2})', line)
+            if version_match:
+                translated_lines.append(line)  # Don't translate version line
+                continue
+            
+            # Detect structural elements
+            is_structural = (
+                re.match(r"^\s*[-=]+\s*$", line) or  # Separator lines
+                not line.strip() or                   # Empty lines
+                re.match(r"^\s*\[.*?\]:\s*", line)   # Link references
+            )
+            
+            if is_structural:
+                translated_lines.append(line)
+                continue
+            
+            # Protect text before translation
+            temp_line = line
+            placeholders = {}
+            counter = 0
+            
+            def protect(pattern, text, flags=0):
+                nonlocal counter
+                def repl(m):
+                    nonlocal counter
+                    key = f"__p{counter}__"
+                    placeholders[key] = m.group(0)
+                    counter += 1
+                    return key
+                    return re.sub(pattern, repl, text, flags=flags)
+            
+            # Protection for all important patterns
+            if is_protect_enabled():
+                for p in protected["protected_phrases"]:
+                    temp_line = protect(p, temp_line)
+            
+            # Additional protection specifically for CHANGELOG
+            temp_line = protect(r"https?://[^\s\)]+", temp_line)           # URLs
+            temp_line = protect(r"`[^`]+`", temp_line)                     # Inline code
+            temp_line = protect(r"\[.*?\]\([^)]+\)", temp_line)            # Markdown links
+            temp_line = protect(r"\[[\d\.]+\]:\s*\S+", temp_line)          # Version links
+            
+            # Translate text
+            translated = translate_text(temp_line, translate_code)
+            
+            # Restore placeholders to original text
+            for key, val in placeholders.items():
+                translated = translated.replace(key, val)
+            
+            translated_lines.append(translated)
+        
+        translated_body = "\n".join(translated_lines)
+        
+        # Combine header and body
+        final_changelog = f"{translated_header}\n\n---\n{translated_body}"
+        
+        # Cleanup remaining placeholders
+        final_changelog = re.sub(r"__p\d+__", "", final_changelog)
+        
+        # Write translated CHANGELOG file
+        with open(changelog_dest_path, "w", encoding="utf-8") as f:
+            f.write(final_changelog)
+        
+        print(t("changelog_created", path=changelog_dest_path))
+        return True
+        
+    except Exception as e:
+        print(t("failed_translate_changelog", error=e))
+        return False
+
+def update_changelog_links_in_readme(lang_code, lang_info):
+    """Update CHANGELOG links in translated README"""
+    # Special filename format for jp, zh, kr
+    if lang_code == "jp":
+        readme_path = os.path.join(OUTPUT_DIR, "README-JP.md")
+        changelog_dest_path = "CHANGELOG-JP.md"
+    elif lang_code == "zh":
+        readme_path = os.path.join(OUTPUT_DIR, "README-ZH.md")
+        changelog_dest_path = "CHANGELOG-ZH.md"
+    elif lang_code == "kr":
+        readme_path = os.path.join(OUTPUT_DIR, "README-KR.md")
+        changelog_dest_path = "CHANGELOG-KR.md"
+    else:
+        readme_path = os.path.join(OUTPUT_DIR, f"README-{lang_code.upper()}.md")
+        changelog_dest_path = f"CHANGELOG-{lang_code.upper()}.md"
+    
+    if not os.path.exists(readme_path):
+        return
+    
+    try:
+        with open(readme_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        # Translate "Changelog" and "release notes" text
+        _, translate_code, _ = lang_info
+        translated_changelog = translate_text("Changelog", translate_code)
+        translated_release_notes = translate_text("release notes", translate_code)
+        translated_view = translate_text("view", translate_code)
+        translated_also = translate_text("also", translate_code)
+        translated_you_can = translate_text("You can", translate_code)
+        
+        # Get dynamic GitHub Releases URL
+        github_releases_url = get_github_releases_url()
+        
+        # Update Changelog section title
+        content = re.sub(
+            r'##\s+🧾\s+Changelog',
+            f'## 🧾 {translated_changelog}',
+            content,
+            flags=re.IGNORECASE
+        )
+        
+        # Update link to translated CHANGELOG file
+        content = re.sub(
+            r'\[CHANGELOG\.md\]\(CHANGELOG\.md\)',
+            f'[{translated_changelog}]({changelog_dest_path})',
+            content
+        )
+        
+        # Update release notes text with dynamic URL
+        old_release_pattern = r'You can also view release notes directly on the \[GitHub Releases page\]\([^)]+\)'
+        new_release_text = f'{translated_you_can} {translated_also} {translated_view} {translated_release_notes} directly on the [GitHub Releases page]({github_releases_url})'
+        
+        content = re.sub(old_release_pattern, new_release_text, content, flags=re.IGNORECASE)
+        
+        with open(readme_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        
+        print(t("changelog_links_updated", filename=f"README-{lang_code.upper()}"))
+        
+    except Exception as e:
+        print(t("failed_update_changelog_links", filename=f"README-{lang_code.upper()}", error=e))
+
+def translate_changelog_only(lang_codes=None):
+    """Translate only CHANGELOG without README"""
+    if not has_changelog_file():
+        print(t("no_changelog_file"))
+        return False
+    
+    protected = load_protected_phrases()
+    
+    # If no languages specified, use all languages
+    if not lang_codes:
+        lang_codes = LANGUAGES.keys()
+    
+    success_count = 0
+    for lang_code in lang_codes:
+        if lang_code in LANGUAGES:
+            if translate_changelog(lang_code, LANGUAGES[lang_code], protected):
+                success_count += 1
+                
+                # Update links in README if it exists
+                update_changelog_links_in_readme(lang_code, LANGUAGES[lang_code])
+            
+            time.sleep(1)  # Delay to avoid rate limiting
+    
+    if success_count > 0:
+        print(t("changelog_translated", count=success_count))
+        return True
+    else:
+        print(t("no_changelog_translated"))
+        return False
+
+# ---------------------- NEW CHANGELOG ONLY FUNCTIONS ----------------------
+
+def generate_changelog_only(lang_codes=None):
+    """Generate CHANGELOG files only for selected languages (README files remain unchanged)"""
+    if not has_changelog_file():
+        print(t("no_changelog_file"))
+        return False
+    
+    if not lang_codes:
+        print(t("errors.noLanguagesSelected"))
+        return False
+    
+    # Filter valid language codes
+    valid_langs = [code for code in lang_codes if code in LANGUAGES and code != 'en']
+    
+    if not valid_langs:
+        print(t("errors.noLanguagesSelected"))
+        return False
+    
+    protected = load_protected_phrases()
+    success_count = 0
+    
+    print(t("changelog.translatingChangelog", count=len(valid_langs)))
+    
+    for lang_code in valid_langs:
+        lang_name = LANGUAGES[lang_code][0]
+        print(t("changelog.translating", lang_name=lang_name))
+        
+        try:
+            if translate_changelog(lang_code, LANGUAGES[lang_code], protected):
+                update_changelog_links_in_readme(lang_code, LANGUAGES[lang_code])
+                success_count += 1
+                print(t("changelog.translated", lang_name=lang_name))
+            else:
+                print(t("errors.translationFailedShort", lang_name=lang_name))
+            
+            time.sleep(2)  # Delay to avoid rate limiting
+            
+        except Exception as e:
+            error_msg = t("errors.translationFailed", lang_code=lang_code, error=str(e))
+            print(f"❌ {error_msg}")
+    
+    if success_count > 0:
+        print(t("success.changelogTranslationCompleted"))
+        print(t("progress.filesSaved", path=os.path.join(OUTPUT_DIR)))
+        print(t("success.changelogGenerated", count=success_count))
+        return True
+    else:
+        print(t("errors.changelogTranslationFailed"))
+        return False
+
+def remove_changelog_selected(lang_codes):
+    """Remove CHANGELOG files for selected languages only (README files remain unchanged)"""
+    if not lang_codes:
+        print(t("errors.noLanguagesSelectedRemove"))
+        return False
+    
+    # Filter valid language codes
+    valid_langs = [code for code in lang_codes if code in LANGUAGES and code != 'en']
+    
+    if not valid_langs:
+        print(t("errors.noLanguagesSelectedRemove"))
+        return False
+    
+    # Confirmation prompt
+    confirmation = input(t("confirmation.removeChangelogSelected", count=len(valid_langs)) + " (y/N): ")
+    if confirmation.lower() not in ['y', 'yes']:
+        print("Operation cancelled.")
+        return False
+    
+    print(t("progress.removingSelected", count=len(valid_langs)))
+    
+    removed_count = 0
+    for lang_code in valid_langs:
+        # Special filename format for jp, zh, kr
+        if lang_code == "jp":
+            changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-JP.md")
+        elif lang_code == "zh":
+            changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-ZH.md")
+        elif lang_code == "kr":
+            changelog_path = os.path.join(OUTPUT_DIR, "CHANGELOG-KR.md")
+        else:
+            changelog_path = os.path.join(OUTPUT_DIR, f"CHANGELOG-{lang_code.upper()}.md")
+        
+        if os.path.exists(changelog_path):
+            try:
+                os.remove(changelog_path)
+                removed_count += 1
+                lang_name = LANGUAGES[lang_code][0]
+                print(t("progress.fileCreated", path=lang_name))
+            except Exception as e:
+                print(t("errors.changelogRemoveFailed"))
+        else:
+            print(t("info.noChangelogFiles"))
+    
+    if removed_count > 0:
+        print(t("success.changelogRemovedSelected", count=removed_count))
+        return True
+    else:
+        print(t("info.noChangelogFiles"))
+        return False
+
+def remove_changelog_only():
+    """Remove ALL CHANGELOG files only (README files remain unchanged)"""
+    # Confirmation prompt
+    confirmation = input(t("confirmation.removeChangelog") + " (y/N): ")
+    if confirmation.lower() not in ['y', 'yes']:
+        print("Operation cancelled.")
+        return False
+    
+    print(t("progress.removingChangelog"))
+    
+    removed_count = 0
+    output_dir = OUTPUT_DIR
+    
+    if os.path.exists(output_dir):
+        try:
+            files = os.listdir(output_dir)
+            changelog_files = [f for f in files if f.startswith("CHANGELOG-") and f.endswith(".md")]
+            
+            for file in changelog_files:
+                try:
+                    file_path = os.path.join(output_dir, file)
+                    os.remove(file_path)
+                    removed_count += 1
+                    print(f"✅ Removed: {file}")
+                except Exception as e:
+                    print(f"❌ Failed to remove: {file}")
+            
+            # Remove empty directories
+            try:
+                if os.path.exists(output_dir):
+                    remaining_files = os.listdir(output_dir)
+                    if not remaining_files:
+                        shutil.rmtree(output_dir)
+                        print(f"📁 Folder {output_dir} deleted (empty)")
+                        
+                        # Check if docs folder is also empty
+                        docs_dir = os.path.dirname(output_dir)
+                        if os.path.exists(docs_dir) and not os.listdir(docs_dir):
+                            shutil.rmtree(docs_dir)
+                            print(f"📁 Folder {docs_dir} deleted (empty)")
+            except Exception as e:
+                print(f"❌ Failed to delete folder: {e}")
+                
+        except Exception as e:
+            print(f"❌ Error reading directory: {e}")
+    
+    if removed_count > 0:
+        print(t("success.changelogRemoved", count=removed_count))
+        return True
+    else:
+        print(t("info.noChangelogFiles"))
+        return False
+
+def translate_with_changelog(lang_codes, with_changelog=True):
+    """
+    Translate README with option to include CHANGELOG
+    """
+    if not lang_codes:
+        print(t("errors.noLanguagesSelected"))
+        return False
+    
+    valid_langs = [code for code in lang_codes if code in LANGUAGES and code != 'en']
+    
+    if not valid_langs:
+        print(t("errors.noLanguagesSelected"))
+        return False
+    
+    # Auto setup changelog only if with_changelog is True AND CHANGELOG file exists
+    if with_changelog and has_changelog_file() and not has_changelog_section_in_readme():
+        print(t("changelog.autoSettingUp"))
+        add_changelog_section_to_readme()
+    elif with_changelog and has_changelog_section_in_readme():
+        print(t("changelog.checkingSpacing"))
+        fix_existing_changelog_spacing()
+    
+    protected = load_protected_phrases()
+    
+    # Show progress mode
+    mode_text = t("progress.translatingWithChangelog") if with_changelog else t("progress.translatingReadmeOnly")
+    print(t("progress.startingTranslation", count=len(valid_langs), mode_text=mode_text))
+    
+    success_count = 0
+    
+    for i, lang_code in enumerate(valid_langs):
+        lang_name = LANGUAGES[lang_code][0]
+        progress_msg = t("progress.translatingLanguage", 
+                        lang_name=lang_name, 
+                        current=i+1, 
+                        total=len(valid_langs))
+        print(progress_msg)
+        
+        try:
+            # Translate README first
+            translate_readme(lang_code, LANGUAGES[lang_code], protected)
+            
+            # Translate CHANGELOG only if option is enabled AND CHANGELOG file exists
+            if with_changelog and has_changelog_file():
+                print(t("changelog.translating", lang_name=lang_name))
+                translate_changelog(lang_code, LANGUAGES[lang_code], protected)
+                print(t("progress.changelogTranslated", lang_name=lang_name))
+            elif with_changelog and not has_changelog_file():
+                print(t("info.noChangelogFileSkipping"))
+            
+            success_count += 1
+            
+            # Delay to avoid rate limiting
+            print(t("progress.waiting", seconds=3))
+            time.sleep(3)
+            
+        except Exception as e:
+            error_msg = t("errors.translationFailed", lang_code=lang_code, error=str(e))
+            print(f"❌ {error_msg}")
+    
+    # Update language switcher for ALL existing languages (including English)
+    all_langs_for_switcher = ['en'] + valid_langs
+    update_language_switcher(all_langs_for_switcher)
+    
+    # Show summary
+    print(t("progress.completed"))
+    
+    mode_summary = t("success.filesSavedWithChangelog") if with_changelog else t("success.filesSavedReadmeOnly")
+    print(t("progress.filesSaved", path=os.path.join(OUTPUT_DIR)))
+    
+    success_message = (t("success.translationCompletedWithChangelog", count=success_count) 
+                      if with_changelog else 
+                      t("success.translationCompletedReadmeOnly", count=success_count))
+    print(success_message)
+    
+    return success_count > 0
+
+# ---------------------- MAIN README TRANSLATION FUNCTION ----------------------
+def translate_readme(lang_code, lang_info, protected):
+    lang_name, translate_code, intro_text = lang_info
+    
+    # Special filename format for jp, zh, kr
+    if lang_code == "jp":
+        dest_path = os.path.join(OUTPUT_DIR, "README-JP.md")
+    elif lang_code == "zh":
+        dest_path = os.path.join(OUTPUT_DIR, "README-ZH.md")
+    elif lang_code == "kr":
+        dest_path = os.path.join(OUTPUT_DIR, "README-KR.md")
+    else:
+        dest_path = os.path.join(OUTPUT_DIR, f"README-{lang_code.upper()}.md")
+
+    with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+        src_text = f.read()
+
+    parts = re.split(r'\n-{3,}\n', src_text, 1)
+    src_header, src_body = (parts[0], parts[1]) if len(parts) > 1 else (src_text, "")
+
+    # Clean existing language switcher from header
+    cleaned_header = re.sub(r'^\s*>\s*🌐.*$', '', src_header, flags=re.MULTILINE).strip()
+    
+    # Get all existing languages to create language switcher
+    existing_langs = get_existing_translated_languages()
+    
+    # Create language switcher for this language
+    links = ["[English](../../README.md)"]
+    for code in existing_langs:
+        if code != lang_code:
+            name = LANGUAGES[code][0]
+            # Special filename format for links
+            if code == "jp":
+                links.append(f"[{name}](README-JP.md)")
+            elif code == "zh":
+                links.append(f"[{name}](README-ZH.md)")
+            elif code == "kr":
+                links.append(f"[{name}](README-KR.md)")
+            else:
+                links.append(f"[{name}](README-{code.upper()}.md)")
+    
+    links_text = " | ".join(links)
+    final_header = f"{cleaned_header}\n\n> {intro_text} {links_text}"
+
+    print(t("translating_readme", lang_name=lang_name, lang_code=lang_code.upper()))
+
+    body_lines = src_body.split("\n")
+    translated_lines = []
+    in_code_block = False
+    in_example_block = False
+
+    for i, line in enumerate(body_lines):
+        # Detect code blocks
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            translated_lines.append(line)
+            continue
+
+        # Detect example sections (Before/After)
+        if re.match(r'^\*\*Before:\*\*$', line, re.IGNORECASE):
+            in_example_block = True
+            # Translate "Before:" according to target language
+            translated_before = translate_text("Before:", translate_code)
+            translated_lines.append(f"**{translated_before}**")
+            continue
+        
+        if re.match(r'^\*\*After \(Translated\):\*\*$', line, re.IGNORECASE):
+            in_example_block = True
+            # Translate "After (Translated):" according to target language
+            translated_after = translate_text("After (Translated):", translate_code)
+            translated_lines.append(f"**{translated_after}**")
+            continue
+
+        # If in code block or example, don't translate code content
+        if in_code_block or in_example_block:
+            translated_lines.append(line)
+            # Reset example block status if finding empty line after example
+            if in_example_block and not line.strip():
+                in_example_block = False
+            continue
+
+        # Detect structural elements (empty lines, etc)
+        is_structural = (re.match(r"^\s*\|?[-:|\s]+\|?\s*$", line) or 
+                        not line.strip())
+        if is_structural:
+            translated_lines.append(line)
+            continue
+
+        temp_line = line
+        placeholders = {}
+        counter = 0
+
+        def protect(pattern, text, flags=0):
+            nonlocal counter
+            def repl(m):
+                nonlocal counter
+                key = f"__p{counter}__"
+                placeholders[key] = m.group(0)
+                counter += 1
+                return key
+                return re.sub(pattern, repl, text, flags=flags)
+
+        # Protection for all important patterns
+        if is_protect_enabled():
+            for p in protected["protected_phrases"]:
+                temp_line = protect(p, temp_line)
+
+        # Additional protection for important components
+        temp_line = protect(r"\[.*?\]\(https?://[^\)]+\)", temp_line)  # Markdown links with URL
+        temp_line = protect(r"\[.*?\]\(mailto:[^\)]+\)", temp_line)     # Email links
+        temp_line = protect(r"https?://[^\s\)]+", temp_line)           # URL standalone
+        temp_line = protect(r"MIT\s+License", temp_line, re.IGNORECASE)  # MIT License
+        temp_line = protect(r"\(LICENSE\)", temp_line)                   # (LICENSE)
+        temp_line = protect(r"\(\.\./\.\./LICENSE\)", temp_line)         # (../../LICENSE)
+        temp_line = protect(r"`[^`]+`", temp_line)                       # Inline code
+        temp_line = protect(r"`auto-translate-readmes\.run`", temp_line) # Command ID
+        
+        # Special protection for version and operating systems
+        temp_line = protect(r"\*\*1\.85\.0\*\*", temp_line)             # Specific version 1.85.0
+        temp_line = protect(r"\*\*Windows\*\*", temp_line)              # Windows
+        temp_line = protect(r"\*\*macOS\*\*", temp_line)                # macOS
+        temp_line = protect(r"\*\*Linux\*\*", temp_line)                # Linux
+        
+        # Translate text
+        translated = translate_text(temp_line, translate_code)
+
+        # Restore placeholders to original text
+        for key, val in placeholders.items():
+            translated = translated.replace(key, val)
+
+        translated_lines.append(translated)
+
+    translated_body = "\n".join(translated_lines)
+    
+    # --- GENERIC FIXES ---
+    # 1. Fix bullet points
+    translated_body = re.sub(r'^-(?=\w)', '- ', translated_body, flags=re.MULTILINE)
+    
+    # 2. Fix non-breaking space
+    translated_body = translated_body.replace('\xa0', ' ')
+    
+    # 3. FIX: Fix colon formatting WITHOUT breaking bold text
+    translated_body = re.sub(
+        r'(\w+)\s*:\s*(\*\*(?!.*\*\*:\*\*))',
+        r'\1 : \2',
+        translated_body
+    )
+    
+    # 4. MAIN FIX: Fix extra parenthesis
+    translated_body = re.sub(
+        r'(\[.*?\]\([^)]+\)\.)\)',
+        r'\1',
+        translated_body
+    )
+    
+    # 5. Fix bold format
+    translated_body = re.sub(r'(\*\*)(\d+\.\d+\.\d+)(\*\*)', r'**\2**', translated_body)
+    
+    # 6. ADDITIONAL FIX: Fix bold text broken by colon formatting
+    translated_body = re.sub(
+        r'\*\*(\w+)\s*:\s*\*\*',
+        r'**\1:**',
+        translated_body
+    )
+    
+    # Ensure LICENSE link remains consistent
+    final_text = f"{final_header}\n\n---\n{translated_body}"
+    final_text = re.sub(r"\(LICENSE\)", "(../../LICENSE)", final_text)
+    final_text = re.sub(r"__p\d+__", "", final_text)
+    # 🔽 Tambahkan baris ini agar tabel diterjemahkan otomatis
+    # Di fungsi translate_readme, tambahkan error handling untuk translate_markdown_table
+    try:
+        final_text = translate_markdown_table(final_text, lang_code)
+    except Exception as e:
+        print(f"Warning: Table translation failed: {e}")
+        # Continue with untranslated tables
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(dest_path, "w", encoding="utf-8") as f:
+        f.write(final_text)
+
+    print(t("readme_created", path=dest_path))
+
+    # After successfully translating README, handle CHANGELOG
+    if has_changelog_file() and has_changelog_section_in_readme():
+        # Translate CHANGELOG
+        translate_changelog(lang_code, lang_info, protected)
+        
+        # Update CHANGELOG link in translated README
+        update_changelog_links_in_readme(lang_code, lang_info)
+
+def translate_markdown_table(content: str, lang_code: str) -> str:
+    """
+    Automatically detect markdown tables and translate header + specific columns.
+    Keeps Command ID and Default Shortcut columns untranslated.
+    """
+    table_pattern = re.compile(
+        r"(\|[^\n]+\|\s*\n\|(?:\s*:?[-]+:?[\s|]+)+\n(?:\|[^\n]+\n?)+)",
+        re.MULTILINE
+    )
+
+    tables = table_pattern.findall(content)
+    if not tables:
+        return content
+
+    for table in tables:
+        lines = [line.strip() for line in table.strip().split("\n") if line.strip()]
+        if len(lines) < 3:
+            continue
+
+        header = [h.strip() for h in lines[0].split("|") if h.strip()]
+        separator = lines[1]
+        rows = lines[2:]
+
+        # Cek apakah tabel adalah tabel Commands (dari README)
+        if not any("Command Name" in h for h in header):
+            continue
+
+        # Tentukan kolom mana yang diterjemahkan
+        try:
+            idx_command_name = header.index("Command Name")
+        except ValueError:
+            idx_command_name = None
+        try:
+            idx_desc = header.index("Description")
+        except ValueError:
+            idx_desc = None
+
+        # Terjemahkan header seluruhnya
+        translated_header = []
+        for h in header:
+            try:
+                translated_header.append(GoogleTranslator(source="en", target=lang_code).translate(h))
+            except Exception:
+                translated_header.append(h)
+
+        # Terjemahkan baris data
+        translated_rows = []
+        for row in rows:
+            cols = [c.strip() for c in row.split("|") if c.strip()]
+            new_cols = []
+            for i, col in enumerate(cols):
+                if i in (idx_command_name, idx_desc):
+                    try:
+                        new_cols.append(GoogleTranslator(source="en", target=lang_code).translate(col))
+                    except Exception:
+                        new_cols.append(col)
+                else:
+                    new_cols.append(col)
+            translated_rows.append("| " + " | ".join(new_cols) + " |")
+
+        # Gabungkan ulang tabel
+        translated_table = (
+            "| " + " | ".join(translated_header) + " |\n" +
+            separator + "\n" +
+            "\n".join(translated_rows)
+        )
+
+        # Ganti di konten asli
+        content = content.replace(table, translated_table)
+
+    return content
+
+# ---------------------- MAIN PROGRAM ----------------------
+def main():
+    display_lang = "en"
+    
+    # Check --display parameter
+    for i, arg in enumerate(sys.argv):
+        if arg == "--display" and i + 1 < len(sys.argv):
+            display_lang = sys.argv[i + 1]
+            break
+        elif arg.startswith("--display="):
+            display_lang = arg.split("=")[1]
+            break
+    
+    help_lang = display_lang if display_lang in DISPLAY_LANGUAGES else "en"
+    
+    parser = argparse.ArgumentParser(
+        description=DISPLAY_LANGUAGES[help_lang]["help_description"],
+        epilog=DISPLAY_LANGUAGES[help_lang]["help_epilog"],
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    # Existing arguments
+    parser.add_argument("--lang", help=DISPLAY_LANGUAGES[help_lang]["help_lang"])
+    parser.add_argument("--remove-lang", help=DISPLAY_LANGUAGES[help_lang]["help_remove_lang"])
+    parser.add_argument("--remove-all-lang", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_remove_all_lang"])
+    parser.add_argument("--add-protect", help=DISPLAY_LANGUAGES[help_lang]["help_add_protect"])
+    parser.add_argument("--remove-protect", help=DISPLAY_LANGUAGES[help_lang]["help_remove_protect"])
+    parser.add_argument("--list-protect", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_list_protect"])
+    parser.add_argument("--init-protect", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_init_protect"])
+    parser.add_argument("--enable-protect", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_enable_protect"])
+    parser.add_argument("--disable-protect", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_disable_protect"])
+    parser.add_argument("--status-protect", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_status_protect"])
+    parser.add_argument("--translate-changelog", help=DISPLAY_LANGUAGES[help_lang]["help_translate_changelog"])
+    parser.add_argument("--auto-setup-changelog", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_auto_setup_changelog"])
+    parser.add_argument("--detect-github-url", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_detect_github_url"])
+    parser.add_argument("--display", help=DISPLAY_LANGUAGES[help_lang]["help_display"], default="en", choices=["en", "id", "jp", "de", "es", "fr", "kr", "pl", "pt", "ru", "zh"])
+    
+    # NEW: CHANGELOG Only arguments
+    parser.add_argument("--generate-changelog-only", help=DISPLAY_LANGUAGES[help_lang]["help_generate_changelog_only"])
+    parser.add_argument("--remove-changelog-selected", help=DISPLAY_LANGUAGES[help_lang]["help_remove_changelog_selected"])
+    parser.add_argument("--remove-changelog-only", action="store_true", help=DISPLAY_LANGUAGES[help_lang]["help_remove_changelog_only"])
+    parser.add_argument("--with-changelog", action="store_true", default=True, help=DISPLAY_LANGUAGES[help_lang]["help_with_changelog"])
+    parser.add_argument("--without-changelog", action="store_true", help="Translate only README files (no CHANGELOG)")
+    
+    args = parser.parse_args()
+
+    # Set display language for notifications
+    set_display_language(args.display)
+
+    protected = load_protected_phrases()
+
+    # Handle GitHub URL detection commands
+    if args.detect_github_url:
+        detect_github_url()
+        return
+
+    # Handle protection commands (existing)
+    if args.init_protect:
+        save_protected_phrases(DEFAULT_PROTECTED)
+        print(t("protection_reset"))
+        return
+    if args.add_protect:
+        protected["protected_phrases"].append(args.add_protect)
+        save_protected_phrases(protected)
+        print(t("phrase_added", phrase=args.add_protect))
+        return
+    if args.remove_protect:
+        protected["protected_phrases"] = [p for p in protected["protected_phrases"] if p != args.remove_protect]
+        save_protected_phrases(protected)
+        print(t("phrase_removed", phrase=args.remove_protect))
+        return
+    if args.list_protect:
+        print(t("protected_phrases_list"))
+        for p in protected["protected_phrases"]:
+            print(f"- {p}")
+        return
+    if args.enable_protect:
+        set_protect_status(True)
+        print(t("protection_enabled"))
+        return
+    if args.disable_protect:
+        set_protect_status(False)
+        print(t("protection_disabled"))
+        return
+    if args.status_protect:
+        status = "ACTIVE ✅" if is_protect_enabled() else "INACTIVE ❌"
+        print(t("protection_status", status=status))
+        return
+
+    # Handle NEW CHANGELOG Only commands
+    if args.generate_changelog_only:
+        if args.generate_changelog_only.lower() == 'all':
+            lang_codes = list(LANGUAGES.keys())
+        else:
+            lang_codes = [lang.strip().lower() for lang in args.generate_changelog_only.split(',')]
+            lang_codes = [code for code in lang_codes if code in LANGUAGES]
+        
+        if not lang_codes:
+            print(t("no_valid_language"))
+            return
+        
+        generate_changelog_only(lang_codes)
+        return
+    
+    if args.remove_changelog_selected:
+        lang_codes = [lang.strip().lower() for lang in args.remove_changelog_selected.split(',')]
+        lang_codes = [code for code in lang_codes if code in LANGUAGES]
+        
+        if not lang_codes:
+            print(t("no_valid_language"))
+            return
+        
+        remove_changelog_selected(lang_codes)
+        return
+    
+    if args.remove_changelog_only:
+        remove_changelog_only()
+        return
+
+    # Handle existing CHANGELOG commands
+    if args.auto_setup_changelog:
+        if add_changelog_section_to_readme():
+            print(t("changelog_setup_completed"))
+        else:
+            print(t("changelog_setup_failed"))
+        return
+    
+    if args.translate_changelog:
+        if not has_changelog_file():
+            print(t("no_changelog_file"))
+            return
+        
+        if args.translate_changelog.lower() == 'all':
+            lang_codes = None
+        else:
+            lang_codes = [lang.strip().lower() for lang in args.translate_changelog.split(',')]
+            lang_codes = [code for code in lang_codes if code in LANGUAGES]
+            
+            if not lang_codes:
+                print(t("no_valid_language"))
+                return
+        
+        translate_changelog_only(lang_codes)
+        return
+
+    # Handle language file removal (existing)
+    if args.remove_lang:
+        lang_codes = [lang.strip() for lang in args.remove_lang.split(',')]
+        removed = remove_language_files(lang_codes)
+        if removed:
+            print(t("languages_removed", langs=', '.join(removed)))
+        return
+    
+    if args.remove_all_lang:
+        remove_all_language_files()
+        print(t("all_languages_removed"))
+        return
+
+    # Run translate with CHANGELOG option
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Determine CHANGELOG option
+    with_changelog = args.with_changelog and not args.without_changelog
+    
+    # Auto setup changelog only if with_changelog is True AND CHANGELOG file exists
+    if with_changelog and has_changelog_file() and not has_changelog_section_in_readme():
+        print(t("auto_setup_changelog"))
+        add_changelog_section_to_readme()
+    elif with_changelog and has_changelog_section_in_readme():
+        print(t("checking_changelog_spacing"))
+        fix_existing_changelog_spacing()
+    
+    if args.lang:
+        # Parse multiple languages if comma-separated
+        lang_codes = [lang.strip() for lang in args.lang.split(',')]
+        valid_langs = []
+        
+        for lang_code in lang_codes:
+            if lang_code in LANGUAGES:
+                valid_langs.append(lang_code)
+            else:
+                print(t("language_not_recognized", code=lang_code))
+        
+        if valid_langs:
+            # Translate selected languages with CHANGELOG option
+            translate_with_changelog(valid_langs, with_changelog)
+        else:
+            print(t("no_valid_language"))
+    else:
+        # Translate all languages with CHANGELOG option
+        all_langs = list(LANGUAGES.keys())
+        translate_with_changelog(all_langs, with_changelog)
+    
+    print("\n" + t("all_translated") + "\n")
+
+if __name__ == "__main__":
+    main()
