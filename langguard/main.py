@@ -43,6 +43,21 @@ except ImportError:
         run_js_translate,
     )
 
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def ask_target_path(default='.'):
+    target = input("Target folder/file path (empty=current folder): ").strip()
+    return target or default
+
 
 CYAN = "\033[96m"
 GREEN = "\033[92m"
@@ -107,10 +122,9 @@ def show_banner():
 
 
 def ask_file_path(label="target file"):
-    file_path = input(f"{YELLOW}[+] Enter {label}: {RESET}").strip()
+    file_path = input("Target folder/file path (empty=current folder): ").strip()
     if not file_path:
-        print("❌ File path cannot be empty")
-        return None
+        return "."
     return file_path
 
 
@@ -121,6 +135,7 @@ def is_js_file(path):
 def run_interactive_menu():
     while True:
         pause_after_action = True
+        clear_screen()
         show_banner()
         print(f"{GREEN}[1] Check file / auto-check")
         print("[2] Clipboard template")
@@ -141,8 +156,7 @@ def run_interactive_menu():
 
         if choice == "1":
             mode = input("Use auto mode? (y/N): ").strip().lower()
-            target = input("Target folder/file path (empty=current folder): ").strip()
-            target_path = target or '.'
+            target_path = ask_target_path()
 
             if mode in ["y", "yes"]:
                 auto_check_all(target_path=target_path)
@@ -163,62 +177,74 @@ def run_interactive_menu():
 
         elif choice == "3":
             file_path = ask_file_path()
-            if file_path and os.path.exists(file_path):
+            if os.path.isfile(file_path):
                 if is_js_file(file_path):
                     run_js_generate_section(file_path)
                 else:
                     run_insert_section(file_path)
-            elif file_path:
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "4":
             file_path = ask_file_path()
-            if file_path and os.path.exists(file_path):
+            if os.path.isfile(file_path):
                 if is_js_file(file_path):
                     run_js_add_languages(file_path)
                 else:
                     run_add_languages(file_path)
-            elif file_path:
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "5":
             file_path = ask_file_path()
-            if file_path and os.path.exists(file_path):
+            if os.path.isfile(file_path):
                 if is_js_file(file_path):
                     run_js_remove_languages(file_path)
                 else:
                     run_remove_languages(file_path)
-            elif file_path:
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "6":
             file_path = ask_file_path()
-            if file_path and os.path.exists(file_path):
+            if os.path.isfile(file_path):
                 if is_js_file(file_path):
                     run_js_set_global_lang(file_path)
                 else:
                     run_set_global_lang(file_path)
-            elif file_path:
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "7":
             file_path = ask_file_path()
-            if file_path and os.path.exists(file_path):
+            if os.path.isfile(file_path):
                 if is_js_file(file_path):
                     run_js_repair(file_path)
                 else:
                     run_repair_functions(file_path)
-            elif file_path:
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "8":
             file_path = ask_file_path()
-            if file_path and os.path.exists(file_path):
+            if os.path.isfile(file_path):
                 if is_js_file(file_path):
                     run_js_translate(file_path)
                 else:
                     run_translate(file_path)
-            elif file_path:
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "9":
@@ -232,25 +258,6 @@ def run_interactive_menu():
         if pause_after_action:
             input("\nPress Enter to continue...")
             print("\n" * 2)
-
-        choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
-
-        if choice == "0":
-            print("👋 Bye!")
-            return
-
-        if choice == "1":
-            mode = input("Use auto mode? (y/N): ").strip().lower()
-            if mode in ["y", "yes"]:
-                target = input("Target folder/file path (empty=current folder): ").strip()
-                auto_check_all(target_path=target or '.')
-                pause_after_action = False
-            else:
-                file_path = ask_file_path("python file")
-                if file_path and os.path.exists(file_path):
-                    analyze_file(file_path)
-                elif file_path:
-                    print(f"❌ File not found: {file_path}")
 
         elif choice == "2":
             custom_lang = input("Languages (comma separated, empty=all): ").strip()
