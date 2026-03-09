@@ -59,6 +59,66 @@ def ask_target_path(default='.'):
     target = input("Target folder/file path (empty=current folder): ").strip()
     return target or default
 
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def ask_target_path(default='.'):
+    target = input("Target folder/file path (empty=current folder): ").strip()
+    return target or default
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
 
 def show_banner():
     print(f"{CYAN}" + "=" * 78 + f"{RESET}")
@@ -220,6 +280,100 @@ def run_interactive_menu():
             input("\nPress Enter to continue...")
             print("\n" * 2)
 
+        elif choice == "9":
+            print("LangGuard v1.0.0")
+            print("By Fatony Ahmad Fauzi")
+            print("Email: fatonyahmadfauzi@gmail.com")
+
+        else:
+            print("❌ Invalid option")
+
+        if pause_after_action:
+            input("\nPress Enter to continue...")
+            print("\n" * 2)
+
+        elif choice == "2":
+            custom_lang = input("Languages (comma separated, empty=all): ").strip()
+            languages = [lang.strip() for lang in custom_lang.split(',')] if custom_lang else None
+            clipboard_template(languages)
+
+        elif choice == "3":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_generate_section(file_path)
+                else:
+                    run_insert_section(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "4":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_add_languages(file_path)
+                else:
+                    run_add_languages(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "5":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_remove_languages(file_path)
+                else:
+                    run_remove_languages(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "6":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_set_global_lang(file_path)
+                else:
+                    run_set_global_lang(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "7":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_repair(file_path)
+                else:
+                    run_repair_functions(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "8":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_translate(file_path)
+                else:
+                    run_translate(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "9":
+            print("LangGuard v1.0.0")
+            print("By Fatony Ahmad Fauzi")
+            print("Email: fatonyahmadfauzi@gmail.com")
+
+        else:
+            print("❌ Invalid option")
+
+        if pause_after_action:
+            input("\nPress Enter to continue...")
+            print("\n" * 2)
+
+        input("\nPress Enter to continue...")
+        print("\n" * 2)
+
+        input("\nPress Enter to continue...")
+        print("\n" * 2)
 
 def main():
     if len(sys.argv) == 1:
