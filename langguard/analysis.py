@@ -1339,6 +1339,7 @@ def auto_check_all(target_path='.'):
     complete_files = 0
     files_with_missing_langs = []
     files_with_empty_phrases = []
+    js_files_need_fix = []
     
     for file_path in files:
         print(f"\n{'='*50}")
@@ -1388,6 +1389,9 @@ def auto_check_all(target_path='.'):
                 print(f"   Missing: {', '.join(missing_display)}")
                 if not file_path.endswith('.js'):
                     files_with_missing_langs.append((file_path, missing_langs))
+                else:
+                    if file_path not in js_files_need_fix:
+                        js_files_need_fix.append(file_path)
             
             if languages_with_empty_phrases:
                 # ✅ PERBAIKAN: Tampilkan dengan nama bahasa asli
@@ -1400,11 +1404,17 @@ def auto_check_all(target_path='.'):
                 print(f"   Empty: {', '.join(empty_display)}")
                 if not file_path.endswith('.js'):
                     files_with_empty_phrases.append((file_path, languages_with_empty_phrases))
+                else:
+                    if file_path not in js_files_need_fix:
+                        js_files_need_fix.append(file_path)
+
             if incomplete_js:
                 print(f"⚠️  {os.path.basename(file_path)}: {len(incomplete_js)} languages have incomplete key coverage vs EN")
                 for lang_code, current_count, expected_count in incomplete_js:
                     lang_name = LANGUAGE_NAMES.get(lang_code, lang_code.upper())
                     print(f"   - {lang_code} ({lang_name}): {current_count}/{expected_count} keys")
+                if file_path not in js_files_need_fix:
+                    js_files_need_fix.append(file_path)
             
             if not missing_langs and not languages_with_empty_phrases:
                 print(f"⚠️  {os.path.basename(file_path)}: INCOMPLETE ({len(existing_langs)}/{len(all_supported)} languages)")
@@ -1415,6 +1425,24 @@ def auto_check_all(target_path='.'):
         ask_fix_all_issues(files_with_missing_langs, files_with_empty_phrases)
     else:
         print("ℹ️ Auto-fix suggestions are available for Python files only.")
+
+    if js_files_need_fix:
+        print(f"\n🛠️ JS files needing fixes: {len(js_files_need_fix)}")
+        for fp in js_files_need_fix:
+            print(f"   - {os.path.basename(fp)}")
+        choice = input("👉 Run JS auto-fix now? (y/N): ").strip().lower()
+        if choice in ['y', 'yes']:
+            try:
+                from .js_i18n_tools import run_js_autofix
+            except ImportError:
+                from js_i18n_tools import run_js_autofix
+
+            success = 0
+            for fp in js_files_need_fix:
+                print(f"\n🔧 Auto-fixing JS: {fp}")
+                if run_js_autofix(fp):
+                    success += 1
+            print(f"✅ JS auto-fix completed: {success}/{len(js_files_need_fix)} files")
 
 # ======================== CLI MODE ========================
 

@@ -17,6 +17,14 @@ try:
     from .repair_functions import run_repair_functions
     from .update_language import run_set_global_lang
     from .add_languages import run_add_languages
+    from .js_i18n_tools import (
+        run_js_generate_section,
+        run_js_add_languages,
+        run_js_remove_languages,
+        run_js_set_global_lang,
+        run_js_repair,
+        run_js_translate,
+    )
 except ImportError:
     from analysis import analyze_file, auto_check_all, list_files
     from clipboard import clipboard_template, create_section
@@ -26,6 +34,21 @@ except ImportError:
     from repair_functions import run_repair_functions
     from update_language import run_set_global_lang
     from add_languages import run_add_languages
+    from js_i18n_tools import (
+        run_js_generate_section,
+        run_js_add_languages,
+        run_js_remove_languages,
+        run_js_set_global_lang,
+        run_js_repair,
+        run_js_translate,
+    )
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
 
 
 CYAN = "\033[96m"
@@ -58,6 +81,10 @@ def ask_file_path(label="target file"):
         print("❌ File path cannot be empty")
         return None
     return file_path
+
+def is_js_file(path):
+    return str(path).lower().endswith('.js')
+
 
 def run_interactive_menu():
     while True:
@@ -99,42 +126,60 @@ def run_interactive_menu():
         elif choice == "3":
             file_path = ask_file_path()
             if file_path and os.path.exists(file_path):
-                run_insert_section(file_path)
+                if is_js_file(file_path):
+                    run_js_generate_section(file_path)
+                else:
+                    run_insert_section(file_path)
             elif file_path:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "4":
             file_path = ask_file_path()
             if file_path and os.path.exists(file_path):
-                run_add_languages(file_path)
+                if is_js_file(file_path):
+                    run_js_add_languages(file_path)
+                else:
+                    run_add_languages(file_path)
             elif file_path:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "5":
             file_path = ask_file_path()
             if file_path and os.path.exists(file_path):
-                run_remove_languages(file_path)
+                if is_js_file(file_path):
+                    run_js_remove_languages(file_path)
+                else:
+                    run_remove_languages(file_path)
             elif file_path:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "6":
             file_path = ask_file_path()
             if file_path and os.path.exists(file_path):
-                run_set_global_lang(file_path)
+                if is_js_file(file_path):
+                    run_js_set_global_lang(file_path)
+                else:
+                    run_set_global_lang(file_path)
             elif file_path:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "7":
             file_path = ask_file_path()
             if file_path and os.path.exists(file_path):
-                run_repair_functions(file_path)
+                if is_js_file(file_path):
+                    run_js_repair(file_path)
+                else:
+                    run_repair_functions(file_path)
             elif file_path:
                 print(f"❌ File not found: {file_path}")
 
         elif choice == "8":
             file_path = ask_file_path()
             if file_path and os.path.exists(file_path):
-                run_translate(file_path)
+                if is_js_file(file_path):
+                    run_js_translate(file_path)
+                else:
+                    run_translate(file_path)
             elif file_path:
                 print(f"❌ File not found: {file_path}")
 
@@ -212,7 +257,10 @@ def main():
 
     elif args.command == 'translate':
         if os.path.exists(args.file):
-            run_translate(args.file)
+            if is_js_file(args.file):
+                run_js_translate(args.file)
+            else:
+                run_translate(args.file)
         else:
             print(f"❌ File not found: {args.file}")
 
@@ -223,19 +271,28 @@ def main():
 
     elif args.command == 'generate':
         if os.path.exists(args.file):
-            run_insert_section(args.file)
+            if is_js_file(args.file):
+                run_js_generate_section(args.file)
+            else:
+                run_insert_section(args.file)
         else:
             print(f"❌ File not found: {args.file}")
 
     elif args.command == 'remove-lang':
         if os.path.exists(args.file):
-            run_remove_languages(args.file)
+            if is_js_file(args.file):
+                run_js_remove_languages(args.file)
+            else:
+                run_remove_languages(args.file)
         else:
             print(f"❌ File not found: {args.file}")
 
     elif args.command == 'repair':
         if os.path.exists(args.file):
-            run_repair_functions(args.file)
+            if is_js_file(args.file):
+                run_js_repair(args.file)
+            else:
+                run_repair_functions(args.file)
         else:
             print(f"❌ File not found: {args.file}")
 
@@ -243,11 +300,17 @@ def main():
         if not os.path.exists(args.file):
             print(f"❌ File not found: {args.file}")
         else:
-            run_set_global_lang(args.file)
+            if is_js_file(args.file):
+                run_js_set_global_lang(args.file)
+            else:
+                run_set_global_lang(args.file)
 
     elif args.command == 'add-lang':
         if os.path.exists(args.file):
-            run_add_languages(args.file)
+            if is_js_file(args.file):
+                run_js_add_languages(args.file)
+            else:
+                run_add_languages(args.file)
         else:
             print(f"❌ File not found: {args.file}")
 
