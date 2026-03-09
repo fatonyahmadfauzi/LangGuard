@@ -68,8 +68,6 @@ def is_valid_display_languages_section(content):
     return has_required_functions
 
 
-
-
 def _js_canonical_lang(code):
     if code == 'ja':
         return 'jp'
