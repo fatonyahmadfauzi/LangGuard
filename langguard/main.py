@@ -43,6 +43,13 @@ except ImportError:
         run_js_translate,
     )
 
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -125,6 +132,106 @@ def run_interactive_menu():
         print("[8] Auto-translate missing phrases")
         print("[9] Version")
         print(f"{GRAY}[0] Exit{RESET}")
+
+        choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
+
+        if choice == "0":
+            print("👋 Bye!")
+            return
+
+        if choice == "1":
+            mode = input("Use auto mode? (y/N): ").strip().lower()
+            target = input("Target folder/file path (empty=current folder): ").strip()
+            target_path = target or '.'
+
+            if mode in ["y", "yes"]:
+                auto_check_all(target_path=target_path)
+                pause_after_action = False
+            else:
+                if os.path.isfile(target_path):
+                    analyze_file(target_path)
+                elif os.path.isdir(target_path):
+                    print(f"ℹ️ '{target_path}' is a folder. Running auto-check for that folder.")
+                    auto_check_all(target_path=target_path)
+                else:
+                    print(f"❌ Path not found: {target_path}")
+
+        elif choice == "2":
+            custom_lang = input("Languages (comma separated, empty=all): ").strip()
+            languages = [lang.strip() for lang in custom_lang.split(',')] if custom_lang else None
+            clipboard_template(languages)
+
+        elif choice == "3":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_generate_section(file_path)
+                else:
+                    run_insert_section(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "4":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_add_languages(file_path)
+                else:
+                    run_add_languages(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "5":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_remove_languages(file_path)
+                else:
+                    run_remove_languages(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "6":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_set_global_lang(file_path)
+                else:
+                    run_set_global_lang(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "7":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_repair(file_path)
+                else:
+                    run_repair_functions(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "8":
+            file_path = ask_file_path()
+            if file_path and os.path.exists(file_path):
+                if is_js_file(file_path):
+                    run_js_translate(file_path)
+                else:
+                    run_translate(file_path)
+            elif file_path:
+                print(f"❌ File not found: {file_path}")
+
+        elif choice == "9":
+            print("LangGuard v1.0.0")
+            print("By Fatony Ahmad Fauzi")
+            print("Email: fatonyahmadfauzi@gmail.com")
+
+        else:
+            print("❌ Invalid option")
+
+        if pause_after_action:
+            input("\nPress Enter to continue...")
+            print("\n" * 2)
 
         choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
 
