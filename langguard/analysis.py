@@ -1440,8 +1440,12 @@ def auto_check_all(target_path='.'):
             success = 0
             for fp in js_files_need_fix:
                 print(f"\n🔧 Auto-fixing JS: {fp}")
-                if run_js_autofix(fp):
-                    success += 1
+                try:
+                    if run_js_autofix(fp):
+                        success += 1
+                except KeyboardInterrupt:
+                    print("\n⚠️ JS auto-fix interrupted by user. Continuing without crash.")
+                    break
             print(f"✅ JS auto-fix completed: {success}/{len(js_files_need_fix)} files")
 
 # ======================== CLI MODE ========================

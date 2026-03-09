@@ -6,6 +6,7 @@ Feature parity helpers for JS files using LANG_ORDER + I18N + currentLang.
 
 import os
 import re
+import urllib.request
 
 try:
     from .language_utils import get_all_supported_languages
@@ -350,10 +351,28 @@ def run_js_translate(target_file):
 
     en = languages['en']
 
+    def has_internet():
+        try:
+            urllib.request.urlopen('https://www.google.com', timeout=5)
+            return True
+        except Exception:
+            return False
+
     try:
         from deep_translator import GoogleTranslator
     except Exception:
         GoogleTranslator = None
+
+    # Safe default: always fill missing keys with EN text first.
+    # Optional machine translation only when user confirms and internet is available.
+    use_machine_translation = False
+    if GoogleTranslator is not None:
+        mt_choice = input('Use online machine translation for missing JS phrases? (y/N): ').strip().lower()
+        if mt_choice in ('y', 'yes'):
+            if has_internet():
+                use_machine_translation = True
+            else:
+                print('⚠️ No internet detected. Falling back to EN text copy.')
 
     for lang in list(languages.keys()):
         if lang == 'en':
@@ -361,13 +380,19 @@ def run_js_translate(target_file):
         lang_map = languages[lang]
         for k, v in en.items():
             if k not in lang_map or not str(lang_map[k]).strip():
-                if GoogleTranslator:
+                if use_machine_translation:
                     target_map = {'jp': 'ja', 'kr': 'ko', 'zh': 'zh-CN'}.get(lang, lang)
                     try:
                         lang_map[k] = GoogleTranslator(source='auto', target=target_map).translate(str(v))
+                    except KeyboardInterrupt:
+                        print('\n⚠️ Translation interrupted. Filling remaining keys with EN fallback...')
+                        use_machine_translation = False
+                        lang_map[k] = str(v)
                     except Exception:
+                        # Never fail hard: fallback to EN text
                         lang_map[k] = str(v)
                 else:
+                    # Offline-safe fallback
                     lang_map[k] = str(v)
 
     content = _replace_i18n(content, parsed, languages)
@@ -382,5 +407,9 @@ def run_js_autofix(target_file):
     if not run_js_repair(target_file):
         return False
     run_js_add_languages(target_file)
-    run_js_translate(target_file)
+    try:
+        run_js_translate(target_file)
+    except KeyboardInterrupt:
+        print('\n⚠️ JS auto-fix interrupted during translate step. Existing repairs were kept.')
+        return False
     return True
