@@ -43,6 +43,22 @@ except ImportError:
         run_js_translate,
     )
 
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def ask_target_path(default='.'):
+    target = input("Target folder/file path (empty=current folder): ").strip()
+    return target or default
+
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -150,6 +166,9 @@ def run_interactive_menu():
 
         choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
 
+        if not choice:
+            continue
+
         if choice == "0":
             print("👋 Bye!")
             return
@@ -167,6 +186,7 @@ def run_interactive_menu():
                 elif os.path.isdir(target_path):
                     print(f"ℹ️ '{target_path}' is a folder. Running auto-check for that folder.")
                     auto_check_all(target_path=target_path)
+                    pause_after_action = False
                 else:
                     print(f"❌ Path not found: {target_path}")
 
@@ -246,6 +266,19 @@ def run_interactive_menu():
                 print(f"❌ This command needs a file path, not folder: {file_path}")
             else:
                 print(f"❌ File not found: {file_path}")
+
+        elif choice == "9":
+            print("LangGuard v1.0.0")
+            print("By Fatony Ahmad Fauzi")
+            print("Email: fatonyahmadfauzi@gmail.com")
+
+        else:
+            print("❌ Invalid option")
+            pause_after_action = False
+
+        if pause_after_action:
+            input("\nPress Enter to continue...")
+            print("\n" * 2)
 
         elif choice == "9":
             print("LangGuard v1.0.0")
