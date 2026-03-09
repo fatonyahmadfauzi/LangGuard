@@ -13,7 +13,6 @@ try:
 except ImportError:
     from language_utils import get_all_supported_languages
 
-
 def is_suspicious_translation(text):
     """Detect clearly broken translated values."""
     low = str(text).lower()
@@ -25,7 +24,6 @@ def is_suspicious_translation(text):
         r'please try again later',
     ]
     return any(re.search(p, low) for p in patterns)
-
 
 def _find_matching_brace(text, open_idx):
     brace = 0
@@ -55,7 +53,6 @@ def _find_matching_brace(text, open_idx):
             if brace == 0:
                 return i
     return -1
-
 
 def _split_top_level_props(block):
     props = []
@@ -155,7 +152,6 @@ def parse_js_i18n(content):
         'languages': langs,
     }
 
-
 def _render_i18n(languages):
     order = get_all_supported_languages()
     langs = [l for l in order if l in languages]
@@ -177,7 +173,6 @@ def _replace_i18n(content, parsed, languages):
     new_block = _render_i18n(languages)
     return content[:parsed['i18n_start']] + new_block + content[parsed['i18n_close'] + 1:]
 
-
 def _set_lang_order(content, langs):
     arr = ', '.join([f'"{l}"' for l in langs])
     new_line = f'const LANG_ORDER = [{arr}];'
@@ -190,7 +185,6 @@ def _set_current_lang(content, lang):
     if re.search(r'\b(let|const|var)\s+currentLang\s*=\s*["\'][a-z]{2}["\']\s*;', content):
         return re.sub(r'\b(let|const|var)\s+currentLang\s*=\s*["\'][a-z]{2}["\']\s*;', f'let currentLang = "{lang}";', content, count=1)
     return content + f'\n\nlet currentLang = "{lang}";\n'
-
 
 def run_js_generate_section(target_file):
     with open(target_file, 'r', encoding='utf-8') as f:
@@ -422,7 +416,6 @@ def run_js_translate(target_file):
         f.write(content)
     print('✅ JS translate completed (missing keys filled)')
     return True
-
 
 def run_js_autofix(target_file):
     """Auto-fix for JS: repair -> add missing languages -> translate missing keys."""
