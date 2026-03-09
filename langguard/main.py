@@ -43,13 +43,18 @@ except ImportError:
         run_js_translate,
     )
 
-
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 GRAY = "\033[90m"
 RESET = "\033[0m"
 
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
 
 def show_banner():
     print(f"{CYAN}" + "=" * 78 + f"{RESET}")
@@ -74,7 +79,6 @@ def ask_file_path(label="target file"):
         print("❌ File path cannot be empty")
         return None
     return file_path
-
 
 def is_js_file(path):
     return str(path).lower().endswith('.js')
