@@ -383,7 +383,11 @@ def run_js_translate(target_file):
                 if use_machine_translation:
                     target_map = {'jp': 'ja', 'kr': 'ko', 'zh': 'zh-CN'}.get(lang, lang)
                     try:
-                        lang_map[k] = GoogleTranslator(source='auto', target=target_map).translate(str(v))
+                        translated = GoogleTranslator(source='auto', target=target_map).translate(str(v))
+                        if is_suspicious_translation(translated):
+                            lang_map[k] = str(v)
+                        else:
+                            lang_map[k] = translated
                     except KeyboardInterrupt:
                         print('\n⚠️ Translation interrupted. Filling remaining keys with EN fallback...')
                         use_machine_translation = False
@@ -413,3 +417,13 @@ def run_js_autofix(target_file):
         print('\n⚠️ JS auto-fix interrupted during translate step. Existing repairs were kept.')
         return False
     return True
+    def is_suspicious_translation(text):
+        low = str(text).lower()
+        patterns = [
+            r'error\s*500',
+            r"that.?s an error",
+            r'<html',
+            r'</html>',
+            r'please try again later',
+        ]
+        return any(re.search(p, low) for p in patterns)

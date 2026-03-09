@@ -43,6 +43,12 @@ except ImportError:
         run_js_translate,
     )
 
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
 
 CYAN = "\033[96m"
 GREEN = "\033[92m"
