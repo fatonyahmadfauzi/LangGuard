@@ -13,6 +13,33 @@ try:
 except ImportError:
     from language_utils import get_all_supported_languages
 
+
+JS_DICT_NAMES = ("I18N", "DISPLAY_LANGUAGES")
+JS_GLOBAL_LANG_NAMES = ("currentLang", "DISPLAY_LANG")
+
+
+def _find_js_dict_declaration(content):
+    for name in JS_DICT_NAMES:
+        m = re.search(rf'(?:const|let|var)\s+{name}\s*=\s*\{{', content)
+        if m:
+            return name, m
+    return None, None
+
+
+def _preferred_supported_codes(content, languages=None):
+    supported = list(get_all_supported_languages())
+    language_keys = set((languages or {}).keys())
+
+    use_ja = ('ja' in language_keys) or ('"ja"' in content) or ("'ja'" in content)
+    use_ko = ('ko' in language_keys) or ('"ko"' in content) or ("'ko'" in content)
+
+    if use_ja:
+        supported = ['ja' if c == 'jp' else c for c in supported]
+    if use_ko:
+        supported = ['ko' if c == 'kr' else c for c in supported]
+    return supported
+
+
 def is_suspicious_translation(text):
     """Detect clearly broken translated values."""
     low = str(text).lower()
@@ -73,6 +100,7 @@ def _find_matching_brace(text, open_idx):
                 return i
     return -1
 
+
 def _split_top_level_props(block):
     props = []
     cur = []
@@ -127,7 +155,7 @@ def _split_top_level_props(block):
 
 
 def parse_js_i18n(content):
-    m = re.search(r'const\s+I18N\s*=\s*\{', content)
+    dict_name, m = _find_js_dict_declaration(content)
     if not m:
         return None
     start = m.end() - 1
@@ -169,13 +197,14 @@ def parse_js_i18n(content):
         'i18n_open': start,
         'i18n_close': end,
         'languages': langs,
+        'dict_name': dict_name,
     }
 
 
-def _render_i18n(languages):
-    order = get_all_supported_languages()
+def _render_i18n(languages, dict_name='I18N', supported_order=None):
+    order = supported_order or get_all_supported_languages()
     langs = [l for l in order if l in languages]
-    lines = ['const I18N = {']
+    lines = [f'const {dict_name} = {{']
     for li, lang in enumerate(langs):
         lines.append(f'  {lang}: {{')
         keys = list(languages[lang].keys())
@@ -190,7 +219,7 @@ def _render_i18n(languages):
 
 
 def _replace_i18n(content, parsed, languages):
-    new_block = _render_i18n(languages)
+    new_block = _render_i18n(languages, parsed.get('dict_name', 'I18N'), _preferred_supported_codes(content, languages))
 
     tail_start = parsed['i18n_close'] + 1
     tail = content[tail_start:]
@@ -210,20 +239,24 @@ def _set_lang_order(content, langs):
 
 
 def _set_current_lang(content, lang):
-    if re.search(r'\b(let|const|var)\s+currentLang\s*=\s*["\'][a-z]{2}["\']\s*;', content):
-        return re.sub(r'\b(let|const|var)\s+currentLang\s*=\s*["\'][a-z]{2}["\']\s*;', f'let currentLang = "{lang}";', content, count=1)
-    return content + f'\n\nlet currentLang = "{lang}";\n'
+    for var_name in JS_GLOBAL_LANG_NAMES:
+        patt = rf'\b(let|const|var)\s+{var_name}\s*=\s*["\'][a-z]{{2}}["\']\s*;'
+        if re.search(patt, content):
+            return re.sub(patt, f'let {var_name} = "{lang}";', content, count=1)
+
+    preferred = 'DISPLAY_LANG' if 'DISPLAY_LANGUAGES' in content else 'currentLang'
+    return content + f'\n\nlet {preferred} = "{lang}";\n'
 
 
 def run_js_generate_section(target_file):
     with open(target_file, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    if 'const I18N' in content:
-        print('ℹ️ JS I18N already exists. Use repair/add-lang instead.')
+    if 'const I18N' in content or 'const DISPLAY_LANGUAGES' in content:
+        print('ℹ️ JS i18n dictionary already exists. Use repair/add-lang instead.')
         return True
 
-    langs = get_all_supported_languages()
+    langs = _preferred_supported_codes(content)
     template = {l: {} for l in langs}
     template['en'] = {'hello': 'Hello'}
     content = _set_lang_order(content, langs)
@@ -262,7 +295,7 @@ def run_js_add_languages(target_file):
         languages[lang] = {k: '' for k in en_keys.keys()}
 
     content = _replace_i18n(content, parsed, languages)
-    content = _set_lang_order(content, supported)
+    content = _set_lang_order(content, _preferred_supported_codes(content, languages))
     with open(target_file, 'w', encoding='utf-8') as f:
         f.write(content)
     print(f"✅ Added {len(missing)} languages")
@@ -278,7 +311,7 @@ def run_js_remove_languages(target_file):
         return False
 
     languages = parsed['languages']
-    existing = [l for l in get_all_supported_languages() if l in languages]
+    existing = [l for l in _preferred_supported_codes(content, languages) if l in languages]
     print(f"📊 Existing: {', '.join(existing)}")
     choice = input("Enter language codes to remove (comma), except en: ").strip().lower()
     if not choice:
@@ -288,7 +321,7 @@ def run_js_remove_languages(target_file):
         languages.pop(l, None)
 
     content = _replace_i18n(content, parsed, languages)
-    content = _set_lang_order(content, get_all_supported_languages())
+    content = _set_lang_order(content, _preferred_supported_codes(content, languages))
     with open(target_file, 'w', encoding='utf-8') as f:
         f.write(content)
     print(f"✅ Removed: {', '.join(to_remove)}")
@@ -303,7 +336,7 @@ def run_js_set_global_lang(target_file):
         print('❌ JS I18N not found')
         return False
     languages = parsed['languages']
-    existing = [l for l in get_all_supported_languages() if l in languages]
+    existing = [l for l in _preferred_supported_codes(content, languages) if l in languages]
     print(f"📋 Available languages: {', '.join(existing)}")
     lang = input('Set default language code: ').strip().lower()
     if lang not in existing:
@@ -348,13 +381,13 @@ def run_js_repair(target_file):
 
     # remove unsupported language keys & normalize known languages order only
     normalized = {}
-    for lang in get_all_supported_languages():
+    for lang in _preferred_supported_codes(content, languages):
         if lang in languages:
             normalized[lang] = dict(languages[lang])
 
     languages = normalized
     content = _replace_i18n(content, parsed, languages)
-    content = _set_lang_order(content, get_all_supported_languages())
+    content = _set_lang_order(content, _preferred_supported_codes(content, languages))
     if 'currentLang' not in content:
         content = _set_current_lang(content, 'en')
 
@@ -425,7 +458,7 @@ def run_js_translate(target_file):
             # Repair missing, suspicious, and likely untouched EN values.
             if needs_fill or has_bad_value or has_untranslated_en:
                 if use_machine_translation:
-                    target_map = {'jp': 'ja', 'kr': 'ko', 'zh': 'zh-CN'}.get(lang, lang)
+                    target_map = {'jp': 'ja', 'ja': 'ja', 'kr': 'ko', 'ko': 'ko', 'zh': 'zh-CN'}.get(lang, lang)
                     try:
                         if target_map not in translators:
                             translators[target_map] = GoogleTranslator(source='en', target=target_map)

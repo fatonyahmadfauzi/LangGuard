@@ -50,6 +50,13 @@ YELLOW = "\033[93m"
 GRAY = "\033[90m"
 RESET = "\033[0m"
 
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
 CYAN = "\033[96m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
@@ -202,6 +209,9 @@ def run_interactive_menu():
 
         else:
             print("❌ Invalid option")
+
+        input("\nPress Enter to continue...")
+        print("\n" * 2)
 
         input("\nPress Enter to continue...")
         print("\n" * 2)

@@ -68,18 +68,94 @@ def is_valid_display_languages_section(content):
     return has_required_functions
 
 
+def _js_canonical_lang(code):
+    if code == 'ja':
+        return 'jp'
+    if code == 'ko':
+        return 'kr'
+    return code
+
+
+def _js_supported_langs_for_content(content, existing_langs=None):
+    supported = list(get_all_supported_languages())
+    existing = set(existing_langs or [])
+    if ('ja' in existing) or ('"ja"' in content) or ("'ja'" in content):
+        supported = ['ja' if c == 'jp' else c for c in supported]
+    if ('ko' in existing) or ('"ko"' in content) or ("'ko'" in content):
+        supported = ['ko' if c == 'kr' else c for c in supported]
+    return supported
+
+
+def _extract_js_dict_content(content):
+    dict_match = re.search(r'(?:const|let|var)\s+(?:I18N|DISPLAY_LANGUAGES)\s*=\s*\{', content)
+    if not dict_match:
+        return ''
+
+    start = dict_match.end() - 1
+    brace_count = 0
+    in_string = False
+    escape_next = False
+    quote_char = ''
+    block_chars = []
+
+    for i in range(start, len(content)):
+        ch = content[i]
+
+        if escape_next:
+            if brace_count >= 1:
+                block_chars.append(ch)
+            escape_next = False
+            continue
+
+        if in_string:
+            if brace_count >= 1:
+                block_chars.append(ch)
+            if ch == '\\':
+                escape_next = True
+            elif ch == quote_char:
+                in_string = False
+                quote_char = ''
+            continue
+
+        if ch in ('"', "'"):
+            in_string = True
+            quote_char = ch
+            if brace_count >= 1:
+                block_chars.append(ch)
+            continue
+
+        if ch == '{':
+            brace_count += 1
+            if brace_count > 1:
+                block_chars.append(ch)
+            continue
+
+        if ch == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                break
+            block_chars.append(ch)
+            continue
+
+        if brace_count >= 1:
+            block_chars.append(ch)
+
+    return ''.join(block_chars)
+
 def is_valid_js_i18n_section(content):
-    """Check if content has basic JS i18n structure (LANG_ORDER + I18N)."""
+    """Check if content has basic JS i18n structure (LANG_ORDER + I18N/DISPLAY_LANGUAGES)."""
+    has_dict = re.search(r'(?:const|let|var)\s+(?:I18N|DISPLAY_LANGUAGES)\s*=\s*\{', content) is not None
     return (
         'const LANG_ORDER' in content and
-        'const I18N' in content and
+        has_dict and
         re.search(r'\ben\s*:\s*\{', content) is not None
     )
 
 
 def extract_js_i18n_languages(content):
-    """Extract language keys from JavaScript I18N object."""
-    js_langs = re.findall(r'\b([a-z]{2})\s*:\s*\{', content)
+    """Extract language keys from JavaScript i18n dictionary object."""
+    dict_content = _extract_js_dict_content(content)
+    js_langs = re.findall(r'\b([a-z]{2})\s*:\s*\{', dict_content)
     ordered = []
     for code in js_langs:
         if code not in ordered:
@@ -89,7 +165,8 @@ def extract_js_i18n_languages(content):
 
 def extract_js_lang_keys(content, lang_code):
     """Extract top-level key names for a given language in JS I18N object."""
-    lang_match = re.search(rf'\b{lang_code}\s*:\s*\{{', content)
+    dict_content = _extract_js_dict_content(content)
+    lang_match = re.search(rf'\b{lang_code}\s*:\s*\{{', dict_content)
     if not lang_match:
         return set()
 
@@ -100,8 +177,8 @@ def extract_js_lang_keys(content, lang_code):
     quote_char = ''
     block_chars = []
 
-    for i in range(start, len(content)):
-        ch = content[i]
+    for i in range(start, len(dict_content)):
+        ch = dict_content[i]
 
         if escape_next:
             block_chars.append(ch)
@@ -235,9 +312,10 @@ def analyze_js_i18n_file(file_path):
             print("❌ JS i18n pattern not found. Expected: const LANG_ORDER + const I18N + en section")
             return False
 
-        all_supported = get_all_supported_languages()
         existing_langs = extract_js_i18n_languages(content)
-        missing_langs = [lang for lang in all_supported if lang not in existing_langs]
+        all_supported = _js_supported_langs_for_content(content, existing_langs)
+        existing_canonical = {_js_canonical_lang(l) for l in existing_langs}
+        missing_langs = [lang for lang in all_supported if _js_canonical_lang(lang) not in existing_canonical]
 
         print(f"📊 Language Analysis for JS file: {file_path}")
         print("=" * 60)
@@ -1420,9 +1498,14 @@ def auto_check_all(target_path='.'):
                     if len(all_phrases) == 0:
                         languages_with_empty_phrases.append(lang)
         
-        missing_langs = [lang for lang in all_supported if lang not in existing_langs]
-        
-        has_all_languages = len(existing_langs) == len(all_supported)
+        if file_path.endswith('.js'):
+            js_supported = _js_supported_langs_for_content(content, existing_langs)
+            existing_canonical = {_js_canonical_lang(l) for l in existing_langs}
+            missing_langs = [lang for lang in js_supported if _js_canonical_lang(lang) not in existing_canonical]
+            has_all_languages = len(existing_canonical) == len({ _js_canonical_lang(l) for l in js_supported })
+        else:
+            missing_langs = [lang for lang in all_supported if lang not in existing_langs]
+            has_all_languages = len(existing_langs) == len(all_supported)
         all_languages_have_phrases = (
             len(languages_with_empty_phrases) == 0 and
             len(incomplete_js) == 0 and
