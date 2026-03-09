@@ -827,7 +827,7 @@ def check_english_phrases(file_path):
         for key, value in phrases1:
             if key.strip():  # Pastikan key tidak kosong
                 all_phrases.add(key)
-        for key, value in phrases2:
+        for key in phrases2:
             if key.strip():  # Pastikan key tidak kosong
                 all_phrases.add(key)
         

@@ -97,6 +97,41 @@ def ask_target_path(default='.'):
 
 
 
+def flush_console_input():
+    """Best-effort flush for queued keyboard input in Windows consoles."""
+    if os.name != "nt":
+        return
+    try:
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getwch()
+    except Exception:
+        pass
+
+
+def wait_for_enter_once():
+    """Wait exactly once for Enter to return to main menu."""
+    input("\nPress Enter to continue...")
+
+
+CYAN = "\033[96m"
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+GRAY = "\033[90m"
+RESET = "\033[0m"
+
+
+def clear_screen():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+def ask_target_path(default='.'):
+    target = input("Target folder/file path (empty=current folder): ").strip()
+    return target or default
+
+
+
+
 def wait_for_enter_once():
     """Wait exactly once for Enter to return to main menu."""
     input("\nPress Enter to continue...")
@@ -254,6 +289,148 @@ def ask_file_path(label="target file"):
 
 def is_js_file(path):
     return str(path).lower().endswith('.js')
+
+
+def run_interactive_menu():
+    while True:
+        action_executed = False
+        clear_screen()
+        show_banner()
+        print(f"{GREEN}[1] Check file / auto-check")
+        print("[2] Clipboard template")
+        print("[3] Generate DISPLAY_LANGUAGES section")
+        print("[4] Add missing languages")
+        print("[5] Remove languages")
+        print("[6] Set global language")
+        print("[7] Repair functions/section")
+        print("[8] Auto-translate missing phrases")
+        print("[9] Version")
+        print(f"{GRAY}[0] Exit{RESET}")
+
+        flush_console_input()
+        choice = input(f"\n{YELLOW}[+] Select option: {RESET}").strip()
+
+        if not choice:
+            continue
+
+        if choice == "0":
+            print("👋 Bye!")
+            return
+
+        if choice == "1":
+            mode = input("Use auto mode? (y/N): ").strip().lower()
+            target_path = ask_target_path()
+
+            if mode in ["y", "yes"]:
+                auto_check_all(target_path=target_path)
+                action_executed = True
+            else:
+                if os.path.isfile(target_path):
+                    analyze_file(target_path)
+                    action_executed = True
+                elif os.path.isdir(target_path):
+                    print(f"ℹ️ '{target_path}' is a folder. Running auto-check for that folder.")
+                    auto_check_all(target_path=target_path)
+                    action_executed = True
+                else:
+                    print(f"❌ Path not found: {target_path}")
+                    action_executed = True
+
+        elif choice == "2":
+            custom_lang = input("Languages (comma separated, empty=all): ").strip()
+            languages = [lang.strip() for lang in custom_lang.split(',')] if custom_lang else None
+            clipboard_template(languages)
+            action_executed = True
+
+        elif choice == "3":
+            file_path = ask_file_path()
+            if os.path.isfile(file_path):
+                if is_js_file(file_path):
+                    run_js_generate_section(file_path)
+                else:
+                    run_insert_section(file_path)
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
+                print(f"❌ File not found: {file_path}")
+            action_executed = True
+
+        elif choice == "4":
+            file_path = ask_file_path()
+            if os.path.isfile(file_path):
+                if is_js_file(file_path):
+                    run_js_add_languages(file_path)
+                else:
+                    run_add_languages(file_path)
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
+                print(f"❌ File not found: {file_path}")
+            action_executed = True
+
+        elif choice == "5":
+            file_path = ask_file_path()
+            if os.path.isfile(file_path):
+                if is_js_file(file_path):
+                    run_js_remove_languages(file_path)
+                else:
+                    run_remove_languages(file_path)
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
+                print(f"❌ File not found: {file_path}")
+            action_executed = True
+
+        elif choice == "6":
+            file_path = ask_file_path()
+            if os.path.isfile(file_path):
+                if is_js_file(file_path):
+                    run_js_set_global_lang(file_path)
+                else:
+                    run_set_global_lang(file_path)
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
+                print(f"❌ File not found: {file_path}")
+            action_executed = True
+
+        elif choice == "7":
+            file_path = ask_file_path()
+            if os.path.isfile(file_path):
+                if is_js_file(file_path):
+                    run_js_repair(file_path)
+                else:
+                    run_repair_functions(file_path)
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
+                print(f"❌ File not found: {file_path}")
+            action_executed = True
+
+        elif choice == "8":
+            file_path = ask_file_path()
+            if os.path.isfile(file_path):
+                if is_js_file(file_path):
+                    run_js_translate(file_path)
+                else:
+                    run_translate(file_path)
+            elif os.path.isdir(file_path):
+                print(f"❌ This command needs a file path, not folder: {file_path}")
+            else:
+                print(f"❌ File not found: {file_path}")
+            action_executed = True
+
+        elif choice == "9":
+            print("LangGuard v1.0.0")
+            print("By Fatony Ahmad Fauzi")
+            print("Email: fatonyahmadfauzi@gmail.com")
+            action_executed = True
+
+        else:
+            print("❌ Invalid option")
+
+        if action_executed:
+            wait_for_enter_once()
 
 
 def run_interactive_menu():
