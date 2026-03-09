@@ -13,7 +13,6 @@ try:
 except ImportError:
     from language_utils import get_all_supported_languages
 
-
 def is_suspicious_translation(text):
     """Detect clearly broken translated values."""
     low = str(text).lower()
@@ -73,7 +72,6 @@ def _find_matching_brace(text, open_idx):
             if brace == 0:
                 return i
     return -1
-
 
 def _split_top_level_props(block):
     props = []
